@@ -10,5 +10,5 @@
                   webmachine
                  ]},
   {mod, { darklaunch_app, []}},
-  {env, []}
+  {env, [{config, "/etc/opscode/dark_launch_features.json"}, {reload_time, 10000}]}
  ]}.
