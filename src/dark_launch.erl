@@ -60,8 +60,8 @@ stop_link() ->
 init([]) ->
     %% Assume these are going to be present in the config and crash
     %% if they aren't
-    {ok, ConfigPath} = application:get_env(chef_common, dark_launch_config),
-    {ok, ReloadTime} = application:get_env(chef_common, dark_launch_reload_time),
+    {ok, ConfigPath} = application:get_env(darklaunch, config),
+    {ok, ReloadTime} = application:get_env(darklaunch, reload_time),
     timer:send_interval(ReloadTime, reload_features),
     {ok, load_features(#state{config_path=ConfigPath})}.
 
