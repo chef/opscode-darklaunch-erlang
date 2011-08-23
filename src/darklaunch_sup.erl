@@ -24,18 +24,38 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Ip = case os:getenv("WEBMACHINE_IP") of false -> "0.0.0.0"; Any -> Any end,
-    {ok, Dispatch} = file:consult(filename:join(
-                         [filename:dirname(code:which(?MODULE)),
-                          "..", "priv", "dispatch.conf"])),
-    WebConfig = [
-                 {ip, Ip},
-                 {port, 8000},
-                 {log_dir, "priv/log"},
-                 {dispatch, Dispatch}],
-    Web = {webmachine_mochiweb,
-           {webmachine_mochiweb, start, [WebConfig]},
-           permanent, 5000, worker, dynamic},
-    Processes = [?CHILD(dark_launch, worker), Web],
-    {ok, { {one_for_one, 5, 10}, Processes} }.
+    Children = [?CHILD(dark_launch, worker)] ++ configure_rest_interface(),
+    {ok, { {one_for_one, 10, 10}, Children} }.
 
+%% Internal functions
+configure_rest_interface() ->
+    case read_rest_addr_port() of
+        undefined ->
+            error_logger:info_msg("Configuring darklaunch for embedded mode~n"),
+            [];
+        {Addr, Port} ->
+            {ok, Dispatch} = file:consult(filename:join([filename:dirname(code:which(?MODULE)),
+                                                         "..", "priv", "dispatch.conf"])),
+            WebConfig = [{ip, Addr},
+                         {port, Port},
+                         {log_dir, "priv/log"},
+                         {dispatch, Dispatch}],
+            [{webmachine_mochiweb,
+              {webmachine_mochiweb, start, [WebConfig]},
+              permanent, 5000, worker, dynamic}]
+    end.
+
+read_rest_addr_port() ->
+    case application:get_env(darklaunch, listen_ip) of
+        undefined ->
+            undefined;
+        {ok, Addr} ->
+            case application:get_env(darklaunch, listen_port) of
+                undefined ->
+                    undefined;
+                {ok, Port} ->
+                    error_logger:info_msg("Configuring darklaunch for standalone mode (~s:~p)~n",
+                                          [Addr, Port]),
+                    {Addr, Port}
+            end
+    end.
