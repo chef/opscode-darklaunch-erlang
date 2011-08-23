@@ -6,8 +6,8 @@
   {applications, [
                   kernel,
                   stdlib,
-		  ejson,
-		  webmachine
+                  ejson,
+                  webmachine
                  ]},
   {mod, { darklaunch_app, []}},
   {env, []}
