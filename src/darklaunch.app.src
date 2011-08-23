@@ -1,11 +1,13 @@
 {application, darklaunch,
  [
-  {description, ""},
-  {vsn, "1"},
+  {description, "Manages flags to enable/disable features per org"},
+  {vsn, "0.1"},
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+		  ejson,
+		  webmachine
                  ]},
   {mod, { darklaunch_app, []}},
   {env, []}

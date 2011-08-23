@@ -1,4 +1,4 @@
-DEPS = deps/json deps/meck
+DEPS = deps/json deps/meck deps/webmachine
 #REBAR = `which rebar || echo ./rebar`
 REBAR = ./rebar
 
@@ -11,7 +11,7 @@ clean:
 	@$(REBAR) clean
 
 distclean:
-	@rm -rf deps ebin/*
+	@rm -rf deps ebin/* rel/darklaunch
 
 $(DEPS):
 	@$(REBAR) get-deps
@@ -20,3 +20,9 @@ test: eunit
 
 eunit:
 	@$(REBAR) skip_deps=true eunit
+
+rel: compile
+	@$(REBAR) generate
+
+relclean:
+	@rm -rf rel/darklaunch
