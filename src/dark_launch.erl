@@ -19,6 +19,8 @@
 -export([start_link/0,
          is_enabled/2,
          is_enabled/1,
+         set_enabled/3,
+         set_enabled/2,
          reload_features/0,
          stop_link/0]).
 
@@ -46,6 +48,15 @@ is_enabled(Feature, Org) when is_binary(Feature),
 
 is_enabled(Feature) when is_binary(Feature) ->
     gen_server:call(?SERVER, {enabled, Feature}).
+
+set_enabled(Feature, Org, Val) when is_binary(Feature),
+                              is_list(Org),
+                              is_boolean(Val) ->
+    gen_server:call(?SERVER, {set_enabled, Feature, Org, Val}).
+
+set_enabled(Feature, Val) when is_binary(Feature),
+                          is_boolean(Val) ->
+    gen_server:call(?SERVER, {set_enabled, Feature, Val}).
 
 reload_features() ->
     gen_server:call(?SERVER, reload_features).
@@ -86,6 +97,10 @@ handle_call({enabled, Feature, Org}, _From, #state{features = Features, org_feat
                   Val
           end,
     {reply, Ans, State};
+handle_call({set_enabled, Feature, Val}, _From, State) ->
+    {reply, ok, State};
+handle_call({set_enabled, Feature, Org, Val}, _From, State) ->
+    {reply, ok, State};
 handle_call(reload_features, _From, State) ->
     {reply, ok, check_features(State)};
 handle_call(stop, _From, State) ->
