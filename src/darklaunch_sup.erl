@@ -24,7 +24,7 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Children = [?CHILD(dark_launch, worker)] ++ configure_rest_interface(),
+    Children = [?CHILD(darklaunch, worker)] ++ configure_rest_interface(),
     {ok, { {one_for_one, 10, 10}, Children} }.
 
 %% Internal functions

@@ -1,4 +1,4 @@
--module(dark_launch).
+-module(darklaunch).
 
 -behaviour(gen_server).
 
@@ -22,6 +22,8 @@
          set_enabled/3,
          set_enabled/2,
          reload_features/0,
+         from_json/1,
+         to_json/0,
          stop_link/0]).
 
 %% ------------------------------------------------------------------
@@ -60,6 +62,12 @@ set_enabled(Feature, Val) when is_binary(Feature),
 
 reload_features() ->
     gen_server:call(?SERVER, reload_features).
+
+from_json(Bin) when is_binary(Bin) ->
+    gen_server:call(?SERVER, {from_json, Bin}).
+
+to_json() ->
+    gen_server:call(?SERVER, to_json).
 
 stop_link() ->
     gen_server:call(?SERVER, stop).
@@ -103,6 +111,15 @@ handle_call({set_enabled, Feature, Org, Val}, _From, State) ->
     {reply, ok, State};
 handle_call(reload_features, _From, State) ->
     {reply, ok, check_features(State)};
+handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
+    file:write_file(ConfigPath, Bin),
+    {reply, ok, load_features(State)};
+handle_call(to_json, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
+    OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) -> 
+        dict:append(Feature, list_to_binary(Org), Acc)
+    end, dict:new(), OrgFeatures),
+    Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end, OrgFeatures1, Features),
+    {reply, ejson:encode({dict:to_list(Features1)}), State};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->

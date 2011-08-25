@@ -2,7 +2,7 @@
 %% @copyright YYYY author.
 %% @doc Example webmachine_resource.
 
--module(dark_launch_resource).
+-module(darklaunch_resource).
 -export([init/1, 
          allowed_methods/2,
          content_types_provided/2,
@@ -59,17 +59,22 @@ parse_set_enabled_body(Req) ->
             Val
     end.
 
+to_json(Req, #state{action=is_enabled, feature=undefined, org=undefined}=State) ->
+    {darklaunch:to_json(), Req, State};
 to_json(Req, #state{action=is_enabled, feature=Feature, org=undefined}=State) ->
-    IsEnabled = dark_launch:is_enabled(Feature),
+    IsEnabled = darklaunch:is_enabled(Feature),
     {is_enabled_response(IsEnabled), Req, State};
 to_json(Req, #state{action=is_enabled, feature=Feature, org=Org}=State) ->
-    IsEnabled = dark_launch:is_enabled(Feature, Org),
+    IsEnabled = darklaunch:is_enabled(Feature, Org),
     {is_enabled_response(IsEnabled), Req, State};
+to_json(Req, #state{action=set_enabled, feature=undefined, org=undefined}=State) ->
+    ok = darklaunch:from_json(wrq:req_body(Req)),
+    {<<"{\"ok\": true}">>, Req, State};
 to_json(Req, #state{action=set_enabled, feature=Feature, org=undefined}=State) ->
     IsEnabled = parse_set_enabled_body(Req),
-    ok = dark_launch:set_enabled(Feature, IsEnabled),
+    ok = darklaunch:set_enabled(Feature, IsEnabled),
     {is_enabled_response(IsEnabled), Req, State};
 to_json(Req, #state{action=set_enabled, feature=Feature, org=Org}=State) ->
     IsEnabled = parse_set_enabled_body(Req),
-    ok = dark_launch:set_enabled(Feature, Org, IsEnabled),
+    ok = darklaunch:set_enabled(Feature, Org, IsEnabled),
     {is_enabled_response(IsEnabled), Req, State}.
