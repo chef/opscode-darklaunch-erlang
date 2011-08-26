@@ -141,7 +141,7 @@ darklaunch_resource_to_json_test_() ->
             end
         },
         {
-            [{feature1, true}],
+            [],
             fun(_, _) ->
                 {?LINE, fun() ->
                     meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": true}">> end),
@@ -151,13 +151,47 @@ darklaunch_resource_to_json_test_() ->
             end
         },
         {
-            [{feature1, true}],
+            [],
             fun(_, _) ->
                 {?LINE, fun() ->
                     meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": true}">> end),
                     assert_to_json_equal(set_enabled, <<"feature1">>, "clownco", true),
                     ?assert(meck:called(darklaunch, set_enabled, [<<"feature1">>, "clownco", true])),
                     ?assertNot(meck:called(darklaunch, set_enabled, [<<"feature1">>, true]))
+                end}
+            end
+        },
+        {
+            [],
+            fun(_, _) ->
+                {?LINE, fun() ->
+                    meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": false}">> end),
+                    assert_to_json_equal(set_enabled, <<"feature1">>, undefined, false),
+                    ?assert(meck:called(darklaunch, set_enabled, [<<"feature1">>, false]))
+                end}
+            end
+        },
+        {
+            [],
+            fun(_, _) ->
+                {?LINE, fun() ->
+                    meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": false}">> end),
+                    assert_to_json_equal(set_enabled, <<"feature1">>, "clownco", false),
+                    ?assert(meck:called(darklaunch, set_enabled, [<<"feature1">>, "clownco", false])),
+                    ?assertNot(meck:called(darklaunch, set_enabled, [<<"feature1">>, false]))
+                end}
+            end
+        },
+        {
+            [],
+            fun(_, _) ->
+                {?LINE, fun() ->
+                    meck:expect(wrq, req_body, fun(fake_request) -> fake_body end),
+                    meck:expect(darklaunch, from_json, fun(fake_body) -> ok end),
+                    {Out, fake_request, _OutState} = darklaunch_resource:to_json(fake_request,  #state{action=set_enabled}),
+                    {Keys} = ejson:decode(Out),
+                    ?assertEqual({<<"ok">>, true}, lists:keyfind(<<"ok">>, 1, Keys)),
+                    ?assert(meck:called(darklaunch, from_json, [fake_body]))
                 end}
             end
         }
