@@ -11,12 +11,7 @@
 
 -include_lib("webmachine/include/webmachine.hrl").
 
-%% Request handler state
--record(state, {
-    action,
-    feature,
-    org
-}).
+-include("darklaunch_resource.hrl").
 
 init([]) -> {ok, #state{}}.
 
