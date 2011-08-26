@@ -55,7 +55,7 @@ parse_set_enabled_body(Req) ->
             Any
         end,
     case ejson:decode(Bin) of
-        {[<<"enabled">>, Val]} when is_boolean(Val) ->
+        {[{<<"enabled">>, Val}]} when is_boolean(Val) ->
             Val
     end.
 
