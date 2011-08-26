@@ -136,13 +136,29 @@ darklaunch_resource_to_json_test_() ->
                     ?_assertToJsonEqual(is_enabled, <<"feature1">>, undefined, true),
                     ?_assertToJsonEqual(is_enabled, <<"feature2">>, undefined, false),
                     ?_assertToJsonEqual(is_enabled, <<"feature1">>, "clownco", true),
-                    ?_assertToJsonEqual(is_enabled, <<"feature2">>, "clownco", false),
-                    fun() ->
-                        meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": true}">> end),
-                        assert_to_json_equal(set_enabled, <<"feature1">>, undefined, true),
-                        ?assert(meck:called(darklaunch, set_enabled, [<<"feature1">>, true]))
-                    end
+                    ?_assertToJsonEqual(is_enabled, <<"feature2">>, "clownco", false)
                 ]
+            end
+        },
+        {
+            [{feature1, true}],
+            fun(_, _) ->
+                {?LINE, fun() ->
+                    meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": true}">> end),
+                    assert_to_json_equal(set_enabled, <<"feature1">>, undefined, true),
+                    ?assert(meck:called(darklaunch, set_enabled, [<<"feature1">>, true]))
+                end}
+            end
+        },
+        {
+            [{feature1, true}],
+            fun(_, _) ->
+                {?LINE, fun() ->
+                    meck:expect(wrq, req_body, fun(fake_request) -> <<"{\"enabled\": true}">> end),
+                    assert_to_json_equal(set_enabled, <<"feature1">>, "clownco", true),
+                    ?assert(meck:called(darklaunch, set_enabled, [<<"feature1">>, "clownco", true])),
+                    ?assertNot(meck:called(darklaunch, set_enabled, [<<"feature1">>, true]))
+                end}
             end
         }
      ]
