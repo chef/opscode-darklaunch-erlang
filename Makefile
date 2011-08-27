@@ -23,12 +23,18 @@ eunit:
 
 munge_apps:
 	@mkdir -p rel/apps/darklaunch
-	@cp -R ebin rel/apps/darklaunch/ebin
-	@cp -R priv rel/apps/darklaunch/priv
+	@ln -sf `pwd`/ebin rel/apps/darklaunch
+	@ln -sf `pwd`/priv rel/apps/darklaunch
+	@cp rebar.config rel
+	@echo '{deps_dir, ["../deps"]}.' >> rel/rebar.config
 
 rel: compile munge_apps
-	@$(REBAR) generate
-	@rm -rf rel/apps
+	@cd rel;../$(REBAR) generate
+	@rm -rf rel/apps rel/rebar.config
+	@echo '___  ____ ____ _  _ _    ____ _  _ _  _ ____ _  _ '
+	@echo '|  \ |__| |__/ |_/  |    |__| |  | |\ | |    |__| '
+	@echo '|__/ |  | |  \ | \_ |___ |  | |__| | \| |___ |  | '
+	@echo ''
 
 relclean:
 	@rm -rf rel/darklaunch
