@@ -83,7 +83,7 @@ init([]) ->
     %% if they aren't
     {ok, ConfigPath} = application:get_env(darklaunch, config),
     {ok, ReloadTime} = application:get_env(darklaunch, reload_time),
-    timer:send_interval(ReloadTime, reload_features),
+    timer:send_after(ReloadTime, reload_features),
     ets:new(?FEATURES_TABLE, ?ETS_OPTS),
     ets:new(?ORGS_TABLE, ?ETS_OPTS),
     {ok, load_features(#state{config_path=ConfigPath, reload_interval=ReloadTime})}.
@@ -135,8 +135,10 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info(reload_features, State) ->
-    {noreply, check_features(State)};
+handle_info(reload_features, #state{reload_interval=ReloadInterval}=State) ->
+    State1 = check_features(State),
+    timer:send_after(ReloadInterval, reload_features),
+    {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
