@@ -5,12 +5,14 @@
 -include_lib("kernel/include/file.hrl").
 
 -define(SERVER, ?MODULE).
+-define(FEATURES_TABLE, darklaunch_features).
+-define(ORGS_TABLE, darklaunch_orgs).
+-define(ETS_OPTS, [set, public, named_table, {write_concurrency, true},
+                   {read_concurrency, true}]).
 
 -record(state, {config_path,
-                mtime,
-                features,
-                org_features}).
-
+                reload_interval,
+                mtime}).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -82,44 +84,49 @@ init([]) ->
     {ok, ConfigPath} = application:get_env(darklaunch, config),
     {ok, ReloadTime} = application:get_env(darklaunch, reload_time),
     timer:send_interval(ReloadTime, reload_features),
-    {ok, load_features(#state{config_path=ConfigPath})}.
+    ets:new(?FEATURES_TABLE, ?ETS_OPTS),
+    ets:new(?ORGS_TABLE, ?ETS_OPTS),
+    {ok, load_features(#state{config_path=ConfigPath, reload_interval=ReloadTime})}.
 
-handle_call({enabled, Feature}, _From, #state{features = Features}=State) ->
-    Ans = case dict:find(Feature, Features) of
-              error ->
-                  false;
-              {ok, Val} ->
-                  Val
+handle_call({enabled, Feature}, _From, State) ->
+    Ans = ets:member(?FEATURES_TABLE, Feature),
+    {reply, Ans, State};
+handle_call({enabled, Feature, Org}, _From, State) ->
+    Ans = case ets:member(?ORGS_TABLE, {Feature, Org}) of
+              false ->
+                  ets:member(?FEATURES_TABLE, Feature);
+              true ->
+                  true
           end,
     {reply, Ans, State};
-handle_call({enabled, Feature, Org}, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
-    Ans = case dict:find({Feature, Org}, OrgFeatures) of
-              error ->
-                  case dict:find(Feature, Features) of
-                      error ->
-                          false;
-                      {ok, Val1} ->
-                          Val1
-                  end;
-              {ok, Val} ->
-                  Val
-          end,
-    {reply, Ans, State};
-handle_call({set_enabled, _Feature, _Val}, _From, State) ->
+handle_call({set_enabled, Feature, true}, _From, State) ->
+    ets:insert(?FEATURES_TABLE, {Feature}),
     {reply, ok, State};
-handle_call({set_enabled, _Feature, _Org, _Val}, _From, State) ->
+handle_call({set_enabled, Feature, false}, _From, State) ->
+    ets:delete_object(?FEATURES_TABLE, {Feature}),
+    {reply, ok, State};
+handle_call({set_enabled, Feature, Org, true}, _From, State) ->
+    ets:insert(?ORGS_TABLE, {{Feature, Org}}),
+    {reply, ok, State};
+handle_call({set_enabled, Feature, Org, false}, _From, State) ->
+    ets:delete_object(?ORGS_TABLE, {{Feature, Org}}),
     {reply, ok, State};
 handle_call(reload_features, _From, State) ->
     {reply, ok, check_features(State)};
 handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
     file:write_file(ConfigPath, Bin),
     {reply, ok, load_features(State)};
-handle_call(to_json, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
-    OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) -> 
-        dict:append(Feature, list_to_binary(Org), Acc)
-    end, dict:new(), OrgFeatures),
-    Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end, OrgFeatures1, Features),
-    {reply, ejson:encode({dict:to_list(Features1)}), State};
+handle_call(to_json, _From, State) ->
+    %% Fix (or pin) tables to get consistent view while we iterate
+    %% Tables are fixed together to limit the window of inconsistency
+    %% between the two
+    ets:safe_fixtable(?FEATURES_TABLE, true),
+    ets:safe_fixtable(?ORGS_TABLE, true),
+    Features = features_to_list(),
+    Orgs = orgs_to_list(),
+    ets:safe_fixtable(?FEATURES_TABLE, false),
+    ets:safe_fixtable(?ORGS_TABLE, false),
+    {reply, ejson:encode({Features ++ Orgs}), State};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
@@ -145,12 +152,12 @@ code_change(_OldVsn, State, _Extra) ->
 load_features(State = #state{config_path = ConfigPath}) ->
     case read_config(ConfigPath) of
         {ok, FileInfo, Bin} ->
-            {TopKeys} = ejson:decode(Bin),
-            {Features, OrgFeatures} = lists:foldl(fun(KV, Accum) -> parse_value(KV, Accum) end,
-                                                  {[], []}, TopKeys),
-            State#state{mtime=FileInfo#file_info.mtime,
-                        features=dict:from_list(Features),
-                        org_features=dict:from_list(OrgFeatures)};
+            {Keys} = ejson:decode(Bin),
+            %% Clean out all data and load from scratch
+            ets:delete_all_objects(?FEATURES_TABLE),
+            ets:delete_all_objects(?ORGS_TABLE),
+            [load_tables(Key) || Key <- Keys],
+            State#state{mtime=FileInfo#file_info.mtime};
         Error ->
             %% Crash process if we can't read the file
             throw(Error)
@@ -167,10 +174,12 @@ check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
             throw(Error)
     end.
 
-parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
-    {[{Key, Val}|GlobalConfig], OrgConfig};
-parse_value({Key, Orgs}, {GlobalConfig, OrgConfig}) when is_list(Orgs) ->
-    {GlobalConfig, [{{Key, to_str(Org)}, true} || Org <- Orgs] ++ OrgConfig}.
+load_tables({Key, true}) ->
+    ets:insert(?FEATURES_TABLE, {Key});
+load_tables({_Key, false}) ->
+    ok;
+load_tables({Key, Orgs}) when is_list(Orgs) ->
+    [ets:insert(?ORGS_TABLE, {{Key, to_str(Org)}}) || Org <- Orgs].
 
 read_config(ConfigPath) ->
     case file:read_file(ConfigPath) of
@@ -189,3 +198,19 @@ to_str(X) when is_list(X) ->
     X;
 to_str(X) when is_binary(X) ->
     binary_to_list(X).
+
+features_to_list() ->
+    ets:foldr(fun({Feature}, Accum) -> [{Feature, true}|Accum] end,
+              [], ?FEATURES_TABLE).
+
+orgs_to_list() ->
+    F = fun({{Feature, Org0}}, Accum) ->
+                Org = list_to_binary(Org0),
+                case dict:find(Feature, Accum) of
+                    error ->
+                        dict:store(Feature, [Org], Accum);
+                    {ok, Orgs} ->
+                        dict:store(Feature, [Org|Orgs], Accum)
+                end end,
+    OrgFeatures = ets:foldr(F, dict:new(), ?ORGS_TABLE),
+    dict:to_list(OrgFeatures).

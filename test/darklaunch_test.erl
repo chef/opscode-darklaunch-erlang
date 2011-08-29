@@ -117,5 +117,39 @@ darklaunch_test_() ->
                     ?assertEqual(Bin, <<"{\"feature2\": true}">>)
                 end
             end
+        },
+        {
+            <<"{\"feature1\": true}">>,
+            fun(_, {_TempFile, TempFileName}) ->
+                fun() ->
+                    ?assert(darklaunch:is_enabled(<<"feature1">>)),
+                    ?assertNot(darklaunch:is_enabled(<<"feature2">>)),
+                    darklaunch:from_json(<<"{\"feature2\": true}">>),
+                    ?assertNot(darklaunch:is_enabled(<<"feature1">>)),
+                    ?assert(darklaunch:is_enabled(<<"feature2">>)),
+                    {ok, Bin} = file:read_file(TempFileName),
+                    ?assertEqual(Bin, <<"{\"feature2\": true}">>)
+                end
+            end
+        },
+        {
+            <<"{\"feature2\": [\"clownco\"], \"feature3\": [\"local\"]}">>,
+            fun(_, {_TempFile, _TempFileName}) ->
+                fun() ->
+                    ?assert(darklaunch:is_enabled(<<"feature2">>, "clownco")),
+                    ?assert(darklaunch:is_enabled(<<"feature3">>, "local")),
+                    ?assertNot(darklaunch:is_enabled(<<"feature3">>, "clownco")),
+                    ?assertNot(darklaunch:is_enabled(<<"feature2">>, "local")),
+                    ?assertMatch(ok, darklaunch:set_enabled(<<"feature2">>, "local", true)),
+                    ?assert(darklaunch:is_enabled(<<"feature2">>, "local")),
+                    ?assertMatch(ok, darklaunch:set_enabled(<<"feature3">>, "clownco", true)),
+                    ?assert(darklaunch:is_enabled(<<"feature3">>, "clownco")),
+                    ?assertMatch(ok, darklaunch:set_enabled(<<"feature2">>, "clownco", false)),
+                    ?assertNot(darklaunch:is_enabled(<<"feature2">>, "clownco")),
+                    InterimJson = <<"{\"feature2\": [\"local\"], \"feature3\": [\"local\", \"clownco\"]}">>,
+                    ?_assertEqual(canonical_features(darklaunch:to_json()), canonical_features(InterimJson))
+                end
+            end
         }
+
      ]}.
