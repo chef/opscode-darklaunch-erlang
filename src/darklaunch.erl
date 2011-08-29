@@ -105,9 +105,9 @@ handle_call({enabled, Feature, Org}, _From, #state{features = Features, org_feat
                   Val
           end,
     {reply, Ans, State};
-handle_call({set_enabled, Feature, Val}, _From, State) ->
+handle_call({set_enabled, _Feature, _Val}, _From, State) ->
     {reply, ok, State};
-handle_call({set_enabled, Feature, Org, Val}, _From, State) ->
+handle_call({set_enabled, _Feature, _Org, _Val}, _From, State) ->
     {reply, ok, State};
 handle_call(reload_features, _From, State) ->
     {reply, ok, check_features(State)};
