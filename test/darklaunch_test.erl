@@ -119,3 +119,11 @@ darklaunch_test_() ->
             end
         }
      ]}.
+
+darklaunch_dupe_test() ->
+    {TempFile, TempFileName} = tempfile("darklaunch"),
+    file:write(TempFile, <<"{\"feature1\": true, \"feature1\": false}">>),
+    application:set_env(darklaunch, config, TempFileName),
+    application:set_env(darklaunch, reload_time, 1000),
+    process_flag(trap_exit, true),
+    ?assertMatch({error,{duplicate_key,<<"feature1">>}}, darklaunch:start_link()).

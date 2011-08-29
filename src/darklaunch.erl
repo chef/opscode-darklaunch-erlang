@@ -146,6 +146,7 @@ load_features(State = #state{config_path = ConfigPath}) ->
     case read_config(ConfigPath) of
         {ok, FileInfo, Bin} ->
             {TopKeys} = ejson:decode(Bin),
+            check_for_duplicates(TopKeys),
             {Features, OrgFeatures} = lists:foldl(fun(KV, Accum) -> parse_value(KV, Accum) end,
                                                   {[], []}, TopKeys),
             State#state{mtime=FileInfo#file_info.mtime,
@@ -153,7 +154,7 @@ load_features(State = #state{config_path = ConfigPath}) ->
                         org_features=dict:from_list(OrgFeatures)};
         Error ->
             %% Crash process if we can't read the file
-            throw(Error)
+            exit(Error)
     end.
 
 check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
@@ -164,7 +165,7 @@ check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
             load_features(State#state{mtime=MTime1});
         Error ->
             %% Crash process if we can't read the file
-            throw(Error)
+            exit(Error)
     end.
 
 parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
@@ -183,6 +184,16 @@ read_config(ConfigPath) ->
             end;
         Error ->
             Error
+    end.
+
+check_for_duplicates([]) ->
+    ok;
+check_for_duplicates([{Key, _}|T]) ->
+    case lists:keymember(Key, 1, T) of
+        false ->
+            check_for_duplicates(T);
+        true ->
+            exit({duplicate_key, Key})
     end.
 
 to_str(X) when is_list(X) ->
