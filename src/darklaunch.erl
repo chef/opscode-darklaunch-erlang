@@ -82,7 +82,12 @@ init([]) ->
     {ok, ConfigPath} = application:get_env(darklaunch, config),
     {ok, ReloadTime} = application:get_env(darklaunch, reload_time),
     timer:send_interval(ReloadTime, reload_features),
-    {ok, load_features(#state{config_path=ConfigPath})}.
+    case load_features(#state{config_path=ConfigPath}) of
+        {ok, InitState} ->
+            {ok, InitState};
+        {error, Reason, _} ->
+            {stop, Reason}
+    end.
 
 handle_call({enabled, Feature}, _From, #state{features = Features}=State) ->
     Ans = case dict:find(Feature, Features) of
@@ -110,12 +115,23 @@ handle_call({set_enabled, _Feature, _Val}, _From, State) ->
 handle_call({set_enabled, _Feature, _Org, _Val}, _From, State) ->
     {reply, ok, State};
 handle_call(reload_features, _From, State) ->
-    {reply, ok, check_features(State)};
+    case check_features(State) of
+        {ok, #state{}=NewState} ->
+            {reply, ok, NewState};
+        {error, Reason, #state{}=ErrState} ->
+            {reply, {error, Reason}, ErrState}
+    end;
 handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
-    file:write_file(ConfigPath, Bin),
-    {reply, ok, load_features(State)};
+    {Reply, State1} = case load_features(Bin, State) of
+                          {error, Reason, ErrState} ->
+                              {{error, Reason}, ErrState};
+                          {ok, #state{}=NewState} ->
+                              file:write_file(ConfigPath, Bin),
+                              {ok, NewState}
+                      end,
+    {reply, Reply, State1};
 handle_call(to_json, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
-    OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) -> 
+    OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) ->
         dict:append(Feature, list_to_binary(Org), Acc)
     end, dict:new(), OrgFeatures),
     Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end, OrgFeatures1, Features),
@@ -129,7 +145,13 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info(reload_features, State) ->
-    {noreply, check_features(State)};
+    case check_features(State) of
+        {ok, #state{}=NewState} ->
+            {noreply, NewState};
+        {error, Reason, #state{}=ErrState} ->
+            error_logger:error_report({error, Reason, erlang:get_stacktrace()}),
+            {noreply, ErrState}
+    end;
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -142,36 +164,67 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
-load_features(State = #state{config_path = ConfigPath}) ->
+write_config(Bin, #state{config_path = ConfigPath} = State) ->
+    ok = file:write_file(ConfigPath, Bin),
+    {ok, FileInfo} = file:read_file_info(ConfigPath),
+    State#state{mtime=FileInfo#file_info.mtime}.
+
+parse_config(Bin) ->
+    {TopKeys} = try
+                    ejson:decode(Bin)
+                catch
+                    throw:Why ->
+                        {{bad_json, Why}}
+                end,
+    case validate_config_json(TopKeys) of
+        ok ->
+            {ok, lists:foldl(fun(KV, Accum) -> parse_value(KV, Accum) end,
+                             {[], []}, TopKeys)};
+        Reason ->
+            {error, Reason}
+    end.
+
+load_features(Bin, State) ->
+    load_features(Bin, write_config, State).
+
+load_features(Bin, FileInfo, State) ->
+    case parse_config(Bin) of
+        {error, Reason} ->
+            {error, Reason, State};
+        {ok, {Features, OrgFeatures}} ->
+            State1 = case FileInfo of
+                         write_config ->
+                             write_config(Bin, State);
+                         I ->
+                             State#state{mtime=I#file_info.mtime}
+                     end,
+            {ok, State1#state{features=dict:from_list(Features),
+                              org_features=dict:from_list(OrgFeatures)}}
+    end.
+
+load_features(#state{config_path = ConfigPath} = State) ->
     case read_config(ConfigPath) of
         {ok, FileInfo, Bin} ->
-            {TopKeys} = ejson:decode(Bin),
-            check_for_duplicates(TopKeys),
-            {Features, OrgFeatures} = lists:foldl(fun(KV, Accum) -> parse_value(KV, Accum) end,
-                                                  {[], []}, TopKeys),
-            State#state{mtime=FileInfo#file_info.mtime,
-                        features=dict:from_list(Features),
-                        org_features=dict:from_list(OrgFeatures)};
-        Error ->
-            %% Crash process if we can't read the file
-            exit(Error)
+            load_features(Bin, FileInfo, State);
+        {error, Why} ->
+            {error, Why}
     end.
 
 check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
     case file:read_file_info(ConfigPath) of
         {ok, #file_info{mtime=MTime}} ->
-            State;
-        {ok, #file_info{mtime=MTime1}} ->
-            load_features(State#state{mtime=MTime1});
+            {ok, State};
+        {ok, #file_info{mtime=_MTime1} = FileInfo} ->
+            {ok, Bin} = file:read_file(ConfigPath),
+            load_features(Bin, FileInfo, State);
         Error ->
-            %% Crash process if we can't read the file
-            exit(Error)
+            {error, Error, State}
     end.
 
 parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
     {[{Key, Val}|GlobalConfig], OrgConfig};
 parse_value({Key, Orgs}, {GlobalConfig, OrgConfig}) when is_list(Orgs) ->
-    {GlobalConfig, [{{Key, to_str(Org)}, true} || Org <- Orgs] ++ OrgConfig}.
+   {GlobalConfig, [{{Key, to_str(Org)}, true} || Org <- Orgs] ++ OrgConfig}.
 
 read_config(ConfigPath) ->
     case file:read_file(ConfigPath) of
@@ -186,14 +239,16 @@ read_config(ConfigPath) ->
             Error
     end.
 
-check_for_duplicates([]) ->
+validate_config_json({bad_json, Reason}) ->
+    {bad_json, Reason};
+validate_config_json([]) ->
     ok;
-check_for_duplicates([{Key, _}|T]) ->
+validate_config_json([{Key, _}|T]) ->
     case lists:keymember(Key, 1, T) of
         false ->
-            check_for_duplicates(T);
+            validate_config_json(T);
         true ->
-            exit({duplicate_key, Key})
+            {duplicate_key, Key}
     end.
 
 to_str(X) when is_list(X) ->

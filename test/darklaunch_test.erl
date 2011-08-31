@@ -30,18 +30,17 @@ canonical_org_features(Any) ->
 
 canonical_features(Bin) ->
     {Keys} = ejson:decode(Bin),
-    SortedKeys = lists:sort(lists:map(fun canonical_org_features/1, Keys)),
+    SortedKeys = lists:sort([ canonical_org_features(K) || K <- Keys ]),
     ejson:encode({SortedKeys}).
 
-
-darklaunch_test_() ->
+darklaunch_load_config_from_file_test_() ->
     {foreachx,
      fun(Json) ->
         {TempFile, TempFileName} = tempfile("darklaunch"),
         file:write(TempFile, Json),
         application:set_env(darklaunch, config, TempFileName),
         application:set_env(darklaunch, reload_time, 1000),
-        darklaunch:start_link(),
+        {ok, _} = darklaunch:start_link(),
         {TempFile, TempFileName}
      end,
      fun(_Json, {_TempFile, TempFileName}) ->
@@ -127,3 +126,48 @@ darklaunch_dupe_test() ->
     application:set_env(darklaunch, reload_time, 1000),
     process_flag(trap_exit, true),
     ?assertMatch({error,{duplicate_key,<<"feature1">>}}, darklaunch:start_link()).
+
+from_to_json_test_() ->
+    {foreach,
+     fun() ->
+             {TempFile, TempFileName} = tempfile("darklaunch"),
+             file:write(TempFile, <<"{}">>),
+             os:cmd("cat " ++ TempFileName),
+             application:set_env(darklaunch, config, TempFileName),
+             application:set_env(darklaunch, reload_time, 1000),
+             darklaunch:start_link(),
+             {TempFile, TempFileName}
+     end,
+     fun({_TempFile, TempFileName}) ->
+             darklaunch:stop_link(),
+             ok = file:delete(TempFileName)
+     end,
+     [
+      {"empty config",
+       fun() ->
+               ?assertEqual(<<"{}">>, darklaunch:to_json())
+       end},
+
+      {"valid config",
+       fun() ->
+               Config = iolist_to_binary(["{\"feature1\": "
+                                          "[\"clownco\", \"local\"],"
+                                          "\"feature2\": true}"]),
+               ok = darklaunch:from_json(Config),
+               ?assertEqual(canonical_features(Config),
+                            canonical_features(darklaunch:to_json()))
+       end},
+
+      {"bad JSON config",
+       fun() ->
+               Config = iolist_to_binary(["{\"feature1\": "
+                                          "[\"clownco\", local],"
+                                          "\"feature2\": true}"]),
+               ?assertMatch({error, _}, darklaunch:from_json(Config)),
+               %% old state is preserved
+               ?assertEqual(<<"{}">>, darklaunch:to_json())
+       end}
+
+
+     ]}.
+
