@@ -6,6 +6,7 @@ all: compile
 
 compile: $(DEPS)
 	@$(REBAR) compile
+	@dialyzer -Wrace_conditions -Wunderspecs -r ebin
 
 clean:
 	@$(REBAR) clean
