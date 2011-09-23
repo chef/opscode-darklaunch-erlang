@@ -44,17 +44,17 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-is_enabled(Feature, Org) when is_binary(Feature),
-                              is_list(Org) ->
-    gen_server:call(?SERVER, {enabled, Feature, Org}).
+-spec is_enabled(binary(), binary() | string()) -> boolean().
+is_enabled(Feature, Org) when is_binary(Feature) ->
+    gen_server:call(?SERVER, {enabled, Feature, ensure_bin(Org)}).
 
+-spec is_enabled(binary()) -> boolean().
 is_enabled(Feature) when is_binary(Feature) ->
     gen_server:call(?SERVER, {enabled, Feature}).
 
 set_enabled(Feature, Org, Val) when is_binary(Feature),
-                              is_list(Org),
                               is_boolean(Val) ->
-    gen_server:call(?SERVER, {set_enabled, Feature, Org, Val}).
+    gen_server:call(?SERVER, {set_enabled, Feature, ensure_bin(Org), Val}).
 
 set_enabled(Feature, Val) when is_binary(Feature),
                           is_boolean(Val) ->
@@ -132,7 +132,7 @@ handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
     {reply, Reply, State1};
 handle_call(to_json, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
     OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) ->
-        dict:append(Feature, list_to_binary(Org), Acc)
+        dict:append(Feature, Org, Acc)
     end, dict:new(), OrgFeatures),
     Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end, OrgFeatures1, Features),
     {reply, ejson:encode({dict:to_list(Features1)}), State};
@@ -224,7 +224,7 @@ check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
 parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
     {[{Key, Val}|GlobalConfig], OrgConfig};
 parse_value({Key, Orgs}, {GlobalConfig, OrgConfig}) when is_list(Orgs) ->
-   {GlobalConfig, [{{Key, to_str(Org)}, true} || Org <- Orgs] ++ OrgConfig}.
+   {GlobalConfig, [{{Key, Org}, true} || Org <- Orgs] ++ OrgConfig}.
 
 read_config(ConfigPath) ->
     case file:read_file(ConfigPath) of
@@ -251,7 +251,7 @@ validate_config_json([{Key, _}|T]) ->
             {duplicate_key, Key}
     end.
 
-to_str(X) when is_list(X) ->
-    X;
-to_str(X) when is_binary(X) ->
-    binary_to_list(X).
+ensure_bin(L) when is_list(L) ->
+    list_to_binary(L);
+ensure_bin(B) when is_binary(B) ->
+    B.

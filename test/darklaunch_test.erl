@@ -67,7 +67,9 @@ darklaunch_load_config_from_file_test_() ->
                 [
                     ?_assertNot(darklaunch:is_enabled(<<"feature1">>)),
                     ?_assert(darklaunch:is_enabled(<<"feature1">>, "clownco")),
+                    ?_assert(darklaunch:is_enabled(<<"feature1">>, <<"clownco">>)),
                     ?_assertNot(darklaunch:is_enabled(<<"feature1">>, "someoneelse")),
+                    ?_assertNot(darklaunch:is_enabled(<<"feature1">>, <<"someoneelse">>)),
                     ?_assertEqual(canonical_features(darklaunch:to_json()), canonical_features(Json))
                 ]
             end
@@ -78,7 +80,9 @@ darklaunch_load_config_from_file_test_() ->
                 [
                     ?_assertNot(darklaunch:is_enabled(<<"feature1">>)),
                     ?_assert(darklaunch:is_enabled(<<"feature1">>, "clownco")),
+                    ?_assert(darklaunch:is_enabled(<<"feature1">>, <<"clownco">>)),
                     ?_assert(darklaunch:is_enabled(<<"feature1">>, "local")),
+                    ?_assertNot(darklaunch:is_enabled(<<"feature1">>, <<"someoneelse">>)),
                     ?_assertNot(darklaunch:is_enabled(<<"feature1">>, "someoneelse")),
                     ?_assert(darklaunch:is_enabled(<<"feature2">>)),
                     ?_assert(darklaunch:is_enabled(<<"feature2">>, "clownco")),
