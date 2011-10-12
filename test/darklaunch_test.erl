@@ -5,7 +5,7 @@
 scanenv([]) ->
     %% Fall back to /tmp in case none of
     %% the env vars are found.
-    case file:is_dir("/tmp") of
+    case filelib:is_dir("/tmp") of
         true ->
             "/tmp";
         false ->
