@@ -1,9 +1,10 @@
-%% @author author <author@example.com>
-%% @copyright YYYY author.
-%% @doc Example webmachine_resource.
+%% -*- erlang-indent-level: 4;indent-tabs-mode: nil; fill-column: 92-*-
+%% ex: ts=4 sw=4 et
+%% @author Noah Kantrowitz <noah@coderanger.net>
+%% @copyright 2011 Opscode, Inc.
 
 -module(darklaunch_resource).
--export([init/1, 
+-export([init/1,
          allowed_methods/2,
          content_types_provided/2,
          resource_exists/2,

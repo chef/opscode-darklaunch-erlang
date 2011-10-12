@@ -1,3 +1,8 @@
+%% -*- erlang-indent-level: 4;indent-tabs-mode: nil; fill-column: 92-*-
+%% ex: ts=4 sw=4 et
+%% @author Noah Kantrowitz <noah@coderanger.net>
+%% @copyright 2011 Opscode, Inc.
+
 -module(darklaunch_resource_test).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -102,7 +107,7 @@ darklaunch_resource_to_json_test_() ->
         meck:new(wrq),
         meck:expect(darklaunch, is_enabled, fun(Feature) -> case lists:keyfind(Feature, 1, MockData1) of {_, Val} -> Val; false -> false end end),
         meck:expect(darklaunch, is_enabled,
-            fun(Feature, Org) -> 
+            fun(Feature, Org) ->
                 case lists:keyfind({Feature, Org}, 1, MockData1) of
                     {_, Val} ->
                         Val;
