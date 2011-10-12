@@ -19,7 +19,7 @@ $(DEPS):
 
 test: eunit
 
-eunit:
+eunit: compile
 	@$(REBAR) skip_deps=true eunit
 
 munge_apps:
