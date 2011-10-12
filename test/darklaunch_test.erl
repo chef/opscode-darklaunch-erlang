@@ -3,7 +3,14 @@
 -include_lib("eunit/include/eunit.hrl").
 
 scanenv([]) ->
-    throw(not_found);
+    %% Fall back to /tmp in case none of
+    %% the env vars are found.
+    case file:is_dir("/tmp") of
+        true ->
+            "/tmp";
+        false ->
+            throw(not_found)
+    end;
 scanenv([H|T]) ->
     case os:getenv(H) of
         false ->
