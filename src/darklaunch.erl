@@ -11,11 +11,21 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {config_path,
-                mtime,
-                features,
-                org_features}).
-
+%%-------------------------------------------------------------------
+%% Data Type: state
+%% where:
+%%   config_path: fully-qualified path to JSON config file
+%%   mtime: last modification time of the config file
+%%   features: global features; key is feature, value is a
+%%     boolean indicating its activation status
+%%   org_features: organization-specific features; key is a
+%%     {Feature, Org} tuple, value is boolean indicating if
+%%     the feature is enabled for that organization
+%%-------------------------------------------------------------------
+-record(state, {config_path :: string(),
+                mtime :: file:date_time(),
+                features :: dict(),
+                org_features :: dict()}).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -126,6 +136,13 @@ handle_call(reload_features, _From, State) ->
         {error, Reason, #state{}=ErrState} ->
             {reply, {error, Reason}, ErrState}
     end;
+
+%%------------------------------------------------------------------------------
+%% from_json
+%%
+%% Given a JSON string, parse and load it as a configuration file, and overwrite
+%% the contents of the original configuration file.
+%%------------------------------------------------------------------------------
 handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
     {Reply, State1} = case load_features(Bin, State) of
                           {error, Reason, ErrState} ->
@@ -135,12 +152,22 @@ handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
                               {ok, NewState}
                       end,
     {reply, Reply, State1};
+
+%%------------------------------------------------------------------------------
+%% to_json
+%%
+%% Regenerate a JSON configuration string from the current state of the server.
+%% Contains both global and organization-specific feature configurations.
+%%------------------------------------------------------------------------------
 handle_call(to_json, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
     OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) ->
         dict:append(Feature, Org, Acc)
     end, dict:new(), OrgFeatures),
+    %% Because we ensure no keys are duplicated going in, we just arbitrarily choose the
+    %% global feature in the merge function
     Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end, OrgFeatures1, Features),
     {reply, ejson:encode({dict:to_list(Features1)}), State};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
@@ -169,6 +196,16 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+%%------------------------------------------------------------------------------
+%% Function: write_config/2
+%% Purpose: Write a JSON configuration to the config file and
+%%          generate a new server state from it.
+%% Args: Bin, State
+%% Returns: New state record, identical to State, but with new mtime.
+%%          This is only called from load_features/3, which handles syncing
+%%          the details of the new config with the server's state
+%%------------------------------------------------------------------------------
 write_config(Bin, #state{config_path = ConfigPath} = State) ->
     ok = file:write_file(ConfigPath, Bin),
     {ok, FileInfo} = file:read_file_info(ConfigPath),
@@ -189,9 +226,23 @@ parse_config(Bin) ->
             {error, Reason}
     end.
 
+%%------------------------------------------------------------------------------
+%% Function: load_features/2
+%% Purpose: Load configuration information from a JSON string that does not
+%%          come from a file.  Used in the `from_json` handler to load arbitrary
+%%          JSON and overwrite the config file.
+%%------------------------------------------------------------------------------
 load_features(Bin, State) ->
     load_features(Bin, write_config, State).
 
+%%------------------------------------------------------------------------------
+%% Function: load_features/3
+%% Purpose: Load configuration from Bin.  If FileInfo = write_config, the contents
+%%          of Bin will be written to the config file.
+%% Returns: a new state record, reflective of the contents of Bin
+%%------------------------------------------------------------------------------
+-spec load_features(Bin::binary(), FileInfo::#file_info{} | write_config, State::#state{})
+                   -> {ok, #state{}} | {error, Reason::term(), #state{}}.
 load_features(Bin, FileInfo, State) ->
     case parse_config(Bin) of
         {error, Reason} ->
@@ -207,6 +258,15 @@ load_features(Bin, FileInfo, State) ->
                               org_features=dict:from_list(OrgFeatures)}}
     end.
 
+%%------------------------------------------------------------------------------
+%% Function: load_features/1
+%% Purpose: Perform the initial loading of state for the server.  Reads the
+%%          config_path information from State to locate and parse the JSON
+%%          configuration file.
+%% Returns: Returns {error, Why} if the configuration file could not be read
+%%          {error, Reason, State} if the configuration could not be parsed,
+%%          or {ok, State} if parsing was successful
+%%------------------------------------------------------------------------------
 load_features(#state{config_path = ConfigPath} = State) ->
     case read_config(ConfigPath) of
         {ok, FileInfo, Bin} ->
@@ -215,10 +275,18 @@ load_features(#state{config_path = ConfigPath} = State) ->
             {error, Why}
     end.
 
+%%------------------------------------------------------------------------------
+%% Function: check_features/1
+%% Purpose: Generate new server state if the configuration on disk has changed.
+%%------------------------------------------------------------------------------
+%% -spec check_features(#state{})
+%%                     -> {ok, UpToDateState::#state{}} | {error, term(), OriginalState::#state{}}.
 check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
     case file:read_file_info(ConfigPath) of
+        %% Modification time is unchanged; State need not change
         {ok, #file_info{mtime=MTime}} ->
             {ok, State};
+        %% Config file has changed; reload
         {ok, #file_info{mtime=_MTime1} = FileInfo} ->
             {ok, Bin} = file:read_file(ConfigPath),
             load_features(Bin, FileInfo, State);
@@ -231,6 +299,14 @@ parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
 parse_value({Key, Orgs}, {GlobalConfig, OrgConfig}) when is_list(Orgs) ->
    {GlobalConfig, [{{Key, Org}, true} || Org <- Orgs] ++ OrgConfig}.
 
+
+%%------------------------------------------------------------------------------
+%% Function: read_config
+%% Purpose: Retrieve binary file contents and file information about the JSON
+%%          configuration file
+%%------------------------------------------------------------------------------
+-spec read_config(string())
+                 -> {ok, #file_info{}, binary()} | {error, Reason::term()}.
 read_config(ConfigPath) ->
     case file:read_file(ConfigPath) of
         {ok, Bin} ->
