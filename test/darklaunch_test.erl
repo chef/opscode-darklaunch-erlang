@@ -182,7 +182,27 @@ from_to_json_test_() ->
                ?assertMatch({error, _}, darklaunch:from_json(Config)),
                %% old state is preserved
                ?assertEqual(<<"{}">>, darklaunch:to_json())
-       end}
+       end},
+
+      {"Empty org lists are not round-tripped from to_json",
+       %% semantically equal, but not literally identical
+       fun() ->
+               InConfig = iolist_to_binary(["{"
+                                            "\"feature1\": true,"
+                                            "\"feature2\": [\"clownco\"],"
+                                            "\"feature3\": []"
+                                            "}"]),
+               OutConfig = iolist_to_binary(["{"
+                                             "\"feature1\": true,"
+                                             "\"feature2\": [\"clownco\"]"
+                                             "}"]),
+               ok = darklaunch:from_json(InConfig),
+               ?assertEqual(canonical_features(OutConfig),
+                            canonical_features(darklaunch:to_json()))
+       end
+      }
+     ]}.
+
 
 
      ]}.
