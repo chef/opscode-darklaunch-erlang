@@ -133,8 +133,10 @@ handle_call(reload_features, _From, State) ->
     case check_features(State) of
         {ok, #state{}=NewState} ->
             {reply, ok, NewState};
-        {error, Reason, #state{}=ErrState} ->
-            {reply, {error, Reason}, ErrState}
+        %% If the new config is bad for some reason, keep the server going
+        %% with the original (i.e., good) state
+        {error, Reason, #state{}=OriginalState} ->
+            {reply, {error, Reason}, OriginalState}
     end;
 
 %%------------------------------------------------------------------------------
@@ -220,8 +222,9 @@ parse_config(Bin) ->
                 end,
     case validate_config_json(TopKeys) of
         ok ->
-            {ok, lists:foldl(fun(KV, Accum) -> parse_value(KV, Accum) end,
-                             {[], []}, TopKeys)};
+            {ok, lists:foldl(fun parse_value/2,
+                             {[], []},
+                             TopKeys)};
         Reason ->
             {error, Reason}
     end.
@@ -244,18 +247,26 @@ load_features(Bin, State) ->
 -spec load_features(Bin::binary(), FileInfo::#file_info{} | write_config, State::#state{})
                    -> {ok, #state{}} | {error, Reason::term(), #state{}}.
 load_features(Bin, FileInfo, State) ->
-    case parse_config(Bin) of
-        {error, Reason} ->
-            {error, Reason, State};
-        {ok, {Features, OrgFeatures}} ->
-            State1 = case FileInfo of
-                         write_config ->
-                             write_config(Bin, State);
-                         I ->
-                             State#state{mtime=I#file_info.mtime}
-                     end,
-            {ok, State1#state{features=dict:from_list(Features),
-                              org_features=dict:from_list(OrgFeatures)}}
+    try
+        case parse_config(Bin) of
+            {error, Reason} ->
+                {error, Reason, State};
+            {ok, {Features, OrgFeatures}} ->
+                State1 = case FileInfo of
+                             write_config ->
+                                 write_config(Bin, State);
+                             I ->
+                                 State#state{mtime=I#file_info.mtime}
+                         end,
+                {ok, State1#state{features=dict:from_list(Features),
+                                  org_features=dict:from_list(OrgFeatures)}}
+        end
+    catch
+        %% A key in the configuration doesn't have the proper kind of value;
+        %% Note this fact, and continue using the original state
+        throw:{invalid_config, Why} ->
+            error_logger:error_report({error, Why, erlang:get_stacktrace()}),
+            {error, invalid_config, State}
     end.
 
 %%------------------------------------------------------------------------------
@@ -297,8 +308,10 @@ check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
 parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
     {[{Key, Val}|GlobalConfig], OrgConfig};
 parse_value({Key, Orgs}, {GlobalConfig, OrgConfig}) when is_list(Orgs) ->
-   {GlobalConfig, [{{Key, Org}, true} || Org <- Orgs] ++ OrgConfig}.
-
+   {GlobalConfig, [{{Key, Org}, true} || Org <- Orgs] ++ OrgConfig};
+parse_value({Key, Val}, {_GlobalConfig, _OrgConfig}) ->
+    throw ({invalid_config,
+            {value_not_boolean_or_list, {Key, Val}}}).
 
 %%------------------------------------------------------------------------------
 %% Function: read_config

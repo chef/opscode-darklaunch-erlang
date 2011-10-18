@@ -204,5 +204,90 @@ from_to_json_test_() ->
      ]}.
 
 
+-spec rewrite_config_file_helper({invalid_json | valid_json,
+                                  binary(),
+                                  rewrite | from_json},
+                                 {binary(), string()}) ->
+                                        fun().
+rewrite_config_file_helper({Valid, Json, Method},
+                           {InitialJson, ConfigPath}) ->
+    fun() ->
+            %% Basic sanity checks
+            ?assertNot(canonical_features(Json) =:=
+                           canonical_features(InitialJson)),
+            CurrentServerJson = darklaunch:to_json(),
+            ?assertEqual(canonical_features(InitialJson),
+                                    canonical_features(CurrentServerJson)),
 
-     ]}.
+            %% Change the configuration;
+            %% Either overwrite the config file and allow it to get reloaded,
+            %% or change it via `from_json`
+            case Method of
+                rewrite ->
+                    %% Erlang's file modification time has a granularity of 1 second;
+                    %% Darklaunch judges its config file to have changed based on
+                    %% the modification time, so we need to sleep at least that long
+                    %% before changing the file for it to get automatically
+                    %% reloaded
+                    test_server:sleep(2000),
+
+                    %% write the new config to disk (and verify)
+                    file:write_file(ConfigPath, Json),
+                    ?assertMatch({ok, Json},
+                                 file:read_file(ConfigPath)),
+
+                    %% Wait a bit for it to automatically reload
+                    test_server:sleep(1000);
+                from_json ->
+                    darklaunch:from_json(Json)
+            end,
+
+            case Valid of
+                valid_json ->
+                    ?assertEqual(canonical_features(Json),
+                                 canonical_features(darklaunch:to_json()));
+                invalid_json ->
+                    ?assertEqual(canonical_features(CurrentServerJson),
+                                 canonical_features(darklaunch:to_json()))
+            end
+    end.
+
+reload_test_() ->
+    {foreachx,
+     %% SetupX
+     fun(_X) ->
+             InitialJson = <<"{\"new_theme\":true,\"sql_users\":true,\"sql_nodes\":[\"clownco\"]}">>,
+             {_, ConfigPath} = tempfile("darklaunch"),
+             file:write_file(ConfigPath, InitialJson),
+             application:set_env(darklaunch, config, ConfigPath),
+             application:set_env(darklaunch, reload_time, 500),
+             darklaunch:start_link(),
+             {InitialJson, ConfigPath}
+     end,
+     %% CleanupX
+     fun(_X, {_InitialJson, ConfigPath}) ->
+             darklaunch:stop_link(),
+             ok = file:delete(ConfigPath)
+     end,
+     %% Pairs
+     [
+      {{invalid_json,
+        <<"{\"quick_start\": \"barf\"}">>,
+        rewrite},
+       fun rewrite_config_file_helper/2},
+      {{valid_json,
+        <<"{\"flying_monkeys\":true}">>,
+        rewrite},
+       fun rewrite_config_file_helper/2},
+
+      {{invalid_json,
+        <<"{\"quick_start\": \"barf\"}">>,
+        from_json},
+       fun rewrite_config_file_helper/2},
+      {{valid_json,
+        <<"{\"flying_monkeys\":true}">>,
+        from_json},
+       fun rewrite_config_file_helper/2}
+
+     ]
+    }.
