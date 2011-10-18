@@ -1,6 +1,7 @@
 %% -*- erlang-indent-level: 4;indent-tabs-mode: nil; fill-column: 92-*-
 %% ex: ts=4 sw=4 et
 %% @author Kevin Smith <kevin@opscode.com>
+%% @author Christopher Maier <cm@opscode.com>
 %% @copyright 2011 Opscode, Inc.
 
 -module(darklaunch).
@@ -59,13 +60,17 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
--spec is_enabled(binary(), binary() | string()) -> boolean().
-is_enabled(Feature, Org) when is_binary(Feature) ->
-    gen_server:call(?SERVER, {enabled, Feature, ensure_bin(Org)}).
+-type bin_or_string() :: binary() | string().
 
--spec is_enabled(binary()) -> boolean().
-is_enabled(Feature) when is_binary(Feature) ->
-    gen_server:call(?SERVER, {enabled, Feature}).
+-spec is_enabled(bin_or_string(), bin_or_string())
+                -> boolean().
+is_enabled(Feature, Org) ->
+    gen_server:call(?SERVER, {enabled, ensure_bin(Feature), ensure_bin(Org)}).
+
+-spec is_enabled(bin_or_string())
+                -> boolean().
+is_enabled(Feature) ->
+    gen_server:call(?SERVER, {enabled, ensure_bin(Feature)}).
 
 set_enabled(Feature, Org, Val) when is_binary(Feature),
                               is_boolean(Val) ->
