@@ -305,3 +305,59 @@ reload_test_() ->
 
      ]
     }.
+
+%%------------------------------------------------------------------------------
+%% Test Feature Introspection / Modification Functions
+%%------------------------------------------------------------------------------
+
+enabled_test_helper({Feature, Org, Expected}, _) ->
+    fun() ->
+            case Org of
+                nil ->
+                    ?assertEqual(Expected, darklaunch:is_enabled(Feature)),
+                    ?assertEqual(Expected, darklaunch:is_enabled(list_to_binary(Feature)));
+                _ ->
+                    ?assertEqual(Expected, darklaunch:is_enabled(Feature,
+                                                                 Org)),
+                    ?assertEqual(Expected, darklaunch:is_enabled(Feature,
+                                                                 list_to_binary(Org))),
+                    ?assertEqual(Expected, darklaunch:is_enabled(list_to_binary(Feature),
+                                                                 Org)),
+                    ?assertEqual(Expected, darklaunch:is_enabled(list_to_binary(Feature),
+                                                                 list_to_binary(Org)))
+            end
+    end.
+
+is_enabled_test_() ->
+    {foreachx,
+     %% SetupX
+     fun(_X) ->
+             Json = <<"{\"feature1\":true, \"feature2\": [\"clownco\", \"skynet\"]}">>,
+             ConfigPath = setup_darklaunch(Json, 500),
+             {Json, ConfigPath}
+     end,
+     %% CleanupX
+     fun(_X, {_, ConfigPath}) ->
+             cleanup_darklaunch(ConfigPath)
+     end,
+     %% Pairs
+     [
+      %% Global features
+      {{"feature1", nil, true},
+       fun enabled_test_helper/2},
+      {{"unknown_feature", nil, false},
+       fun enabled_test_helper/2},
+
+      %% Org features
+      {{"feature1", "skynet", true},
+       fun enabled_test_helper/2},
+      {{"unknown_feature", "skynet", false},
+       fun enabled_test_helper/2},
+
+      {{"feature2", "clownco", true},
+       fun enabled_test_helper/2},
+      {{"feature2", "skynet", true},
+       fun enabled_test_helper/2},
+      {{"feature2", "mungbeanpalace", false},
+       fun enabled_test_helper/2}
+     ]}.
