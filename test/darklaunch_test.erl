@@ -45,6 +45,25 @@ canonical_features(Bin) ->
     SortedKeys = lists:sort([ canonical_org_features(K) || K <- Keys ]),
     ejson:encode({SortedKeys}).
 
+%%------------------------------------------------------------------------------
+%% Server Setup / Cleanup Functions
+%%------------------------------------------------------------------------------
+
+%% Sets up a testing darklaunch server.  Returns path to config file.
+setup_darklaunch(ConfigJson, ReloadTime) ->
+    {_, ConfigPath} = tempfile("darklaunch"),
+    file:write_file(ConfigPath, ConfigJson),
+    application:set_env(darklaunch, config, ConfigPath),
+    application:set_env(darklaunch, reload_time, ReloadTime),
+    darklaunch:start_link(),
+    ConfigPath.
+
+cleanup_darklaunch(ConfigPath) ->
+    darklaunch:stop_link(),
+    ok = file:delete(ConfigPath).
+
+%%------------------------------------------------------------------------------
+
 darklaunch_load_config_from_file_test_() ->
     {foreachx,
      fun(Json) ->
@@ -257,17 +276,12 @@ reload_test_() ->
      %% SetupX
      fun(_X) ->
              InitialJson = <<"{\"new_theme\":true,\"sql_users\":true,\"sql_nodes\":[\"clownco\"]}">>,
-             {_, ConfigPath} = tempfile("darklaunch"),
-             file:write_file(ConfigPath, InitialJson),
-             application:set_env(darklaunch, config, ConfigPath),
-             application:set_env(darklaunch, reload_time, 500),
-             darklaunch:start_link(),
+             ConfigPath = setup_darklaunch(InitialJson, 500),
              {InitialJson, ConfigPath}
      end,
      %% CleanupX
      fun(_X, {_InitialJson, ConfigPath}) ->
-             darklaunch:stop_link(),
-             ok = file:delete(ConfigPath)
+             cleanup_darklaunch(ConfigPath)
      end,
      %% Pairs
      [
