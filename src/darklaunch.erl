@@ -72,13 +72,13 @@ is_enabled(Feature, Org) ->
 is_enabled(Feature) ->
     gen_server:call(?SERVER, {enabled, ensure_bin(Feature)}).
 
-set_enabled(Feature, Org, Val) when is_binary(Feature),
-                              is_boolean(Val) ->
-    gen_server:call(?SERVER, {set_enabled, Feature, ensure_bin(Org), Val}).
+-spec set_enabled/3::(bin_or_string(), bin_or_string(), boolean()) -> ok.
+set_enabled(Feature, Org, Val) when is_boolean(Val) ->
+    gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), ensure_bin(Org), Val}).
 
-set_enabled(Feature, Val) when is_binary(Feature),
-                          is_boolean(Val) ->
-    gen_server:call(?SERVER, {set_enabled, Feature, Val}).
+-spec set_enabled/2::(bin_or_string(), boolean()) -> ok.
+set_enabled(Feature, Val) when is_boolean(Val) ->
+    gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), Val}).
 
 reload_features() ->
     gen_server:call(?SERVER, reload_features).
