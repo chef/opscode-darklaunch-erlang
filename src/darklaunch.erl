@@ -150,14 +150,8 @@ handle_call(reload_features, _From, State) ->
 %% Given a JSON string, parse and load it as a configuration file, and overwrite
 %% the contents of the original configuration file.
 %%------------------------------------------------------------------------------
-handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
-    {Reply, State1} = case load_features(Bin, State) of
-                          {error, Reason, ErrState} ->
-                              {{error, Reason}, ErrState};
-                          {ok, #state{}=NewState} ->
-                              file:write_file(ConfigPath, Bin),
-                              {ok, NewState}
-                      end,
+handle_call({from_json, Bin}, _From, #state{}=State) ->
+    {Reply, State1} = write_new_config(Bin, State),
     {reply, Reply, State1};
 
 %%------------------------------------------------------------------------------
@@ -215,6 +209,18 @@ state_to_json(#state{features = Features,
                            Features),
 
     ejson:encode({dict:to_list(Features1)}).
+
+-spec write_new_config/2 :: (NewJson :: binary(), CurrentState :: #state{}) ->
+                                    {ok | {error, term()}, #state{}}.
+write_new_config(NewJson, #state{}=State) ->
+    case load_features(NewJson, State) of
+        {error, Reason, ErrState} ->
+            {{error, Reason}, ErrState};
+        {ok, #state{}=NewState} ->
+            write_config(NewJson, State),
+            {ok, NewState}
+    end.
+
 %%------------------------------------------------------------------------------
 %% Function: write_config/2
 %% Purpose: Write a JSON configuration to the config file and
