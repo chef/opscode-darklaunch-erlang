@@ -166,14 +166,9 @@ handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
 %% Regenerate a JSON configuration string from the current state of the server.
 %% Contains both global and organization-specific feature configurations.
 %%------------------------------------------------------------------------------
-handle_call(to_json, _From, #state{features = Features, org_features = OrgFeatures}=State) ->
-    OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) ->
-        dict:append(Feature, Org, Acc)
-    end, dict:new(), OrgFeatures),
-    %% Because we ensure no keys are duplicated going in, we just arbitrarily choose the
-    %% global feature in the merge function
-    Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end, OrgFeatures1, Features),
-    {reply, ejson:encode({dict:to_list(Features1)}), State};
+handle_call(to_json, _From, State) when is_record(State, state)->
+    Json = state_to_json(State),
+    {reply, Json, State};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
@@ -204,6 +199,22 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+-spec state_to_json(#state{})
+                   -> binary().
+state_to_json(#state{features = Features,
+                     org_features = OrgFeatures}) ->
+    OrgFeatures1 = dict:fold(fun({Feature, Org}, true, Acc) ->
+                                     dict:append(Feature, Org, Acc)
+                             end,
+                             dict:new(),
+                             OrgFeatures),
+    %% Because we ensure no keys are duplicated going in, we just arbitrarily choose the
+    %% global feature in the merge function
+    Features1 = dict:merge(fun(_Key, _Value1, Value2) -> Value2 end,
+                           OrgFeatures1,
+                           Features),
+
+    ejson:encode({dict:to_list(Features1)}).
 %%------------------------------------------------------------------------------
 %% Function: write_config/2
 %% Purpose: Write a JSON configuration to the config file and
