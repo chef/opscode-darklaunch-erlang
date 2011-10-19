@@ -361,3 +361,78 @@ is_enabled_test_() ->
       {{"feature2", "mungbeanpalace", false},
        fun enabled_test_helper/2}
      ]}.
+
+set_enabled_test_helper({Feature, Org, OriginalStatus, DesiredStatus, EnabledOrgs, DisabledOrgs}, _) ->
+    fun() ->
+            {IsEnabledArgs, SetEnabledArgs} = case Org of
+                                                  global -> {[Feature], [Feature, DesiredStatus]};
+                                                  _ -> {[Feature, Org], [Feature, Org, DesiredStatus]}
+                                              end,
+            ?assertEqual(OriginalStatus, apply(darklaunch, is_enabled, IsEnabledArgs)),
+            apply(darklaunch, set_enabled, SetEnabledArgs),
+            ?assertEqual(DesiredStatus, apply(darklaunch, is_enabled, IsEnabledArgs)),
+
+            [?assertEqual(true, darklaunch:is_enabled(Feature, O)) || O <- EnabledOrgs],
+            [?assertEqual(false, darklaunch:is_enabled(Feature, O)) || O <- DisabledOrgs]
+    end.
+
+set_enabled_test_() ->
+    {foreachx,
+     %% SetupX
+     fun(_X) ->
+             Json = <<"{\"feature1\":true, \"feature2\": [\"clownco\", \"skynet\"]}">>,
+             ConfigPath = setup_darklaunch(Json, 500),
+             {Json, ConfigPath}
+     end,
+     %% CleanupX
+     fun(_X, {_Json, ConfigPath}) ->
+             cleanup_darklaunch(ConfigPath)
+     end,
+     %% Pairs
+     [
+
+      %% Global Feature Tests
+      %% Enabling a global feature (that is already enabled)
+      {{"feature1", global, true, true, ["clownco", "skynet", "opscode"],[]},
+       fun set_enabled_test_helper/2},
+
+      %% Enabling a global feature (that is NOT already enabled)
+      {{"use_awesome_sauce", global, false, true, ["clownco", "skynet", "opscode"], []},
+       fun set_enabled_test_helper/2},
+
+      %% Disabling a global feature (that is already enabled)
+      {{"feature1", global, true, false, [], ["clownco", "skynet", "opscode"]},
+       fun set_enabled_test_helper/2},
+
+      %% Disabling a global feature (that is already disabled)
+      {{"use_awesome_sauce", global, false, false, [], ["clownco","skynet", "opscode"]},
+       fun set_enabled_test_helper/2},
+
+
+      %% Org Feature Tests
+      %% Enabling a feature for an org (that is already enabled)
+
+      {{"feature2", "clownco", true, true, ["clownco", "skynet"], []},
+       fun set_enabled_test_helper/2},
+
+      %% Enabling a feature for an org (that is NOT already enabled)
+      {{"use_awesome_sauce", "clownco", false, true, ["clownco"], ["skynet"]},
+       fun set_enabled_test_helper/2},
+
+      %% Disabling a feature for an org (that is already enabled)
+      %% Disabling a feature for one org should leave it enabled for another
+      {{"feature2", "clownco", true, false, ["skynet"], ["clownco"]},
+       fun set_enabled_test_helper/2},
+
+      %% Disabling a feature for an org  (that is already disabled)
+      {{"use_awesome_sauce", "clownco", false, false, [], ["clownco", "skynet"]},
+       fun set_enabled_test_helper/2},
+
+      %% Setting a global feature for an org should leave it a global
+      {{"feature1", "clownco", true, true, ["clownco", "skynet", "randomorg"], []},
+      fun set_enabled_test_helper/2},
+
+      %% Enabling a feature for one org should not also enable it for another
+      {{"use_awesome_sauce", "clownco", false, true, ["clownco"], ["skynet"]},
+      fun set_enabled_test_helper/2}
+     ]}.

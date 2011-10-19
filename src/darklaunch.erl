@@ -130,10 +130,45 @@ handle_call({enabled, Feature, Org}, _From, #state{features = Features, org_feat
                   Val
           end,
     {reply, Ans, State};
-handle_call({set_enabled, _Feature, _Val}, _From, State) ->
-    {reply, ok, State};
-handle_call({set_enabled, _Feature, _Org, _Val}, _From, State) ->
-    {reply, ok, State};
+
+
+handle_call({set_enabled, Feature, Value},
+            _From,
+            #state{features = Features}=State) ->
+    %% update it: if Val is true, add it; otherwise remove it.
+    UpdatedFeatures = case Value of
+                          true ->
+                              dict:store(Feature, Value, Features);
+                          false ->
+                              dict:erase(Feature, Features)
+                      end,
+    %% reload the configuration
+    NewState = State#state{features=UpdatedFeatures},
+    NewJson = state_to_json(NewState),
+
+    %% Write the new JSON to disk
+    {Reply, State1} = load_features(NewJson, NewState),
+    {reply, Reply, State1};
+
+handle_call({set_enabled, Feature, Org, Value},
+            _From,
+            #state{org_features = OrgFeatures}=State) ->
+    %% update it: if Val is true, add it; otherwise remove it.
+    UpdatedOrgFeatures = case Value of
+                             true ->
+                                 dict:store({Feature, Org}, Value, OrgFeatures);
+                             false ->
+                                 dict:erase({Feature, Org}, OrgFeatures)
+                         end,
+    %% reload the configuration
+    NewState = State#state{org_features=UpdatedOrgFeatures},
+    NewJson = state_to_json(NewState),
+
+    %% Write the new JSON to disk
+    {Reply, State1} = load_features(NewJson, NewState),
+
+    {reply, Reply, State1};
+
 handle_call(reload_features, _From, State) ->
     case check_features(State) of
         {ok, #state{}=NewState} ->
@@ -150,8 +185,14 @@ handle_call(reload_features, _From, State) ->
 %% Given a JSON string, parse and load it as a configuration file, and overwrite
 %% the contents of the original configuration file.
 %%------------------------------------------------------------------------------
-handle_call({from_json, Bin}, _From, #state{}=State) ->
-    {Reply, State1} = write_new_config(Bin, State),
+handle_call({from_json, Bin}, _From, #state{config_path = ConfigPath}=State) ->
+    {Reply, State1} = case load_features(Bin, State) of
+                          {error, Reason, ErrState} ->
+                              {{error, Reason}, ErrState};
+                          {ok, #state{}=NewState} ->
+                              file:write_file(ConfigPath, Bin),
+                              {ok, NewState}
+                      end,
     {reply, Reply, State1};
 
 %%------------------------------------------------------------------------------
@@ -209,17 +250,6 @@ state_to_json(#state{features = Features,
                            Features),
 
     ejson:encode({dict:to_list(Features1)}).
-
--spec write_new_config/2 :: (NewJson :: binary(), CurrentState :: #state{}) ->
-                                    {ok | {error, term()}, #state{}}.
-write_new_config(NewJson, #state{}=State) ->
-    case load_features(NewJson, State) of
-        {error, Reason, ErrState} ->
-            {{error, Reason}, ErrState};
-        {ok, #state{}=NewState} ->
-            write_config(NewJson, State),
-            {ok, NewState}
-    end.
 
 %%------------------------------------------------------------------------------
 %% Function: write_config/2
