@@ -1,4 +1,4 @@
-DEPS = deps/json deps/meck deps/webmachine
+DEPS = deps/ejson deps/meck deps/webmachine
 #REBAR = `which rebar || echo ./rebar`
 REBAR = ./rebar
 
