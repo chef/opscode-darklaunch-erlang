@@ -41,7 +41,7 @@ relclean:
 	@rm -rf rel/darklaunch
 	@rm -rf rel/apps
 
-update:
+update: compile
 	@cd rel/darklaunch;bin/darklaunch restart
 
 devrel: rel
