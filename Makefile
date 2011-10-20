@@ -11,7 +11,7 @@ compile: $(DEPS)
 clean:
 	@$(REBAR) clean
 
-distclean:
+distclean: clean
 	@rm -rf deps ebin/* rel/darklaunch
 
 $(DEPS):
