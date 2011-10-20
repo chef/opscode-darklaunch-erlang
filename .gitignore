@@ -4,3 +4,5 @@ erl_crash.dump
 deps
 rel/darklaunch/*
 .eunit
+doc/
+*/*.beam
