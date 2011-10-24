@@ -6,6 +6,8 @@ all: compile
 
 compile: $(DEPS)
 	@$(REBAR) compile
+
+dialyze: compile
 	@dialyzer -Wrace_conditions -Wunderspecs -r ebin
 
 clean:
@@ -19,7 +21,7 @@ $(DEPS):
 
 test: eunit
 
-eunit: compile
+eunit: compile dialyze
 	@$(REBAR) skip_deps=true eunit
 
 munge_apps:
@@ -29,13 +31,19 @@ munge_apps:
 	@cp rebar.config rel
 	@echo '{deps_dir, ["../deps"]}.' >> rel/rebar.config
 
-rel: compile munge_apps
+generate: munge_apps
 	@cd rel;../$(REBAR) generate
 	@rm -rf rel/apps rel/rebar.config
 	@echo '___  ____ ____ _  _ _    ____ _  _ _  _ ____ _  _ '
 	@echo '|  \ |__| |__/ |_/  |    |__| |  | |\ | |    |__| '
 	@echo '|__/ |  | |  \ | \_ |___ |  | |__| | \| |___ |  | '
 	@echo ''
+
+rel: compile dialyze munge_apps generate
+
+# Use this to build Darklaunch in a cookbook... no need to dialyze
+# in that environment
+prodrel: compile munge_apps generate
 
 relclean:
 	@rm -rf rel/darklaunch
