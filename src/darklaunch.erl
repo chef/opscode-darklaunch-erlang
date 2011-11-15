@@ -65,32 +65,32 @@ start_link() ->
 -spec is_enabled(bin_or_string(), bin_or_string())
                 -> boolean().
 is_enabled(Feature, Org) ->
-    gen_server:call(?SERVER, {enabled, ensure_bin(Feature), ensure_bin(Org)}).
+    gen_server:call(?SERVER, {enabled, ensure_bin(Feature), ensure_bin(Org)}, infinity).
 
 -spec is_enabled(bin_or_string())
                 -> boolean().
 is_enabled(Feature) ->
-    gen_server:call(?SERVER, {enabled, ensure_bin(Feature)}).
+    gen_server:call(?SERVER, {enabled, ensure_bin(Feature)}, infinity).
 
 -spec set_enabled/3::(bin_or_string(), bin_or_string(), boolean()) -> ok.
 set_enabled(Feature, Org, Val) when is_boolean(Val) ->
-    gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), ensure_bin(Org), Val}).
+    gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), ensure_bin(Org), Val}, infinity).
 
 -spec set_enabled/2::(bin_or_string(), boolean()) -> ok.
 set_enabled(Feature, Val) when is_boolean(Val) ->
-    gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), Val}).
+    gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), Val}, infinity).
 
 reload_features() ->
-    gen_server:call(?SERVER, reload_features).
+    gen_server:call(?SERVER, reload_features, infinity).
 
 from_json(Bin) when is_binary(Bin) ->
-    gen_server:call(?SERVER, {from_json, Bin}).
+    gen_server:call(?SERVER, {from_json, Bin}, infinity).
 
 to_json() ->
-    gen_server:call(?SERVER, to_json).
+    gen_server:call(?SERVER, to_json, infinity).
 
 stop_link() ->
-    gen_server:call(?SERVER, stop).
+    gen_server:call(?SERVER, stop, infinity).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
