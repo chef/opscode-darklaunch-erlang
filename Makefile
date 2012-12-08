@@ -1,14 +1,13 @@
 DEPS = deps/ejson deps/meck deps/webmachine
-#REBAR = `which rebar || echo ./rebar`
-REBAR = ./rebar
+REBAR = rebar
 
-all: compile
+all: compile test dialyze
 
 compile: $(DEPS)
 	@$(REBAR) compile
 
 dialyze: compile
-	@dialyzer -Wrace_conditions -Wunderspecs -r ebin
+	@dialyzer -Wunderspecs -r ebin
 
 clean:
 	@$(REBAR) clean
@@ -21,7 +20,7 @@ $(DEPS):
 
 test: eunit
 
-eunit: compile dialyze
+eunit: compile
 	@$(REBAR) skip_deps=true eunit
 
 munge_apps:
@@ -32,14 +31,14 @@ munge_apps:
 	@echo '{deps_dir, ["../deps"]}.' >> rel/rebar.config
 
 generate: munge_apps
-	@cd rel;../$(REBAR) generate
+	@cd rel;$(REBAR) generate
 	@rm -rf rel/apps rel/rebar.config
 	@echo '___  ____ ____ _  _ _    ____ _  _ _  _ ____ _  _ '
 	@echo '|  \ |__| |__/ |_/  |    |__| |  | |\ | |    |__| '
 	@echo '|__/ |  | |  \ | \_ |___ |  | |__| | \| |___ |  | '
 	@echo ''
 
-rel: compile dialyze munge_apps generate
+rel: compile munge_apps generate
 
 # Use this to build Darklaunch in a cookbook... no need to dialyze
 # in that environment
