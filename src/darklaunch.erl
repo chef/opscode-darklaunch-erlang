@@ -249,7 +249,7 @@ state_to_json(#state{features = Features,
                            OrgFeatures1,
                            Features),
 
-    ejson:encode({dict:to_list(Features1)}).
+    iolist_to_binary(jiffy:encode({dict:to_list(Features1)})).
 
 %%------------------------------------------------------------------------------
 %% Function: write_config/2
@@ -267,7 +267,7 @@ write_config(Bin, #state{config_path = ConfigPath} = State) ->
 
 parse_config(Bin) ->
     {TopKeys} = try
-                    ejson:decode(Bin)
+                    jiffy:decode(Bin)
                 catch
                     throw:Why ->
                         {{bad_json, Why}}
