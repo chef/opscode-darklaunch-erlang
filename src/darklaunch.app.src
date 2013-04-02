@@ -1,20 +1,17 @@
 %% -*- erlang-indent-level: 4;indent-tabs-mode: nil; fill-column: 92-*-
 %% ex: ts=4 sw=4 et
 %% @author Kevin Smith <kevin@opscode.com>
-%% @copyright 2011 Opscode, Inc.
+%% @copyright 2011-2013 Opscode, Inc.
 
 {application, darklaunch,
  [
   {description, "Manages flags to enable/disable features per org"},
-  {vsn, "0.1"},
+  {vsn, git},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
-                  sasl,
-                  crypto,
-                  ejson,
-                  webmachine
+                  sasl
                  ]},
   {mod, { darklaunch_app, []}},
   {env, [{config, "/etc/opscode/dark_launch_features.json"}, {reload_time, 10000}]}
