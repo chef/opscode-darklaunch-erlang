@@ -171,6 +171,7 @@ from_to_json_test_() ->
              application:set_env(darklaunch, config, TempFileName),
              application:set_env(darklaunch, reload_time, 1000),
              darklaunch:start_link(),
+             error_logger:delete_report_handler(error_logger_tty_h),
              {TempFile, TempFileName}
      end,
      fun({_TempFile, TempFileName}) ->
