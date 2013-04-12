@@ -1,4 +1,4 @@
-DEPS = deps/ejson deps/meck deps/webmachine
+DEPS = deps
 REBAR = rebar
 
 all: compile test dialyze
