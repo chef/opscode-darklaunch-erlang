@@ -75,7 +75,6 @@ darklaunch_load_config_from_file_test_() ->
         {TempFile, TempFileName}
      end,
      fun(_Json, {_TempFile, TempFileName}) ->
-        meck:unload(),
         darklaunch:stop_link(),
         ok = file:delete(TempFileName)
      end,
