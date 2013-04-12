@@ -17,6 +17,8 @@
 %% API
 -export([
          parse_header/1,
+         get_header/1,
+         get_proplist/1,
          is_enabled/2,
          is_enabled/3
         ]).
@@ -29,6 +31,7 @@
 
 -record(xdarklaunch, {
           orgname :: string(),
+          raw_header :: string(),
           values = dict:new() :: dict()
          }).
 
@@ -56,7 +59,7 @@ parse_header_int(undefined) ->
 parse_header_int(<<>>) ->
     no_header;
 parse_header_int(Header) ->
-    Dl = #xdarklaunch{orgname=undefined},
+    Dl = #xdarklaunch{orgname=undefined, raw_header=Header},
     %% It's worth noting that the re library takes strings or binaries, and we force binary output.
     HeaderParts = re:split(Header, <<";">>, [{return, binary}]),
     %% This is chosen to be relatively hardened against garbage; , whitespaces, nonstandard chars
@@ -79,6 +82,22 @@ parse_value(<<"1">>) -> 1;
 parse_value(<<"false">>) -> 0;
 parse_value(<<"true">>) -> 1;
 parse_value(X) -> X.
+
+%% @doc Fetch the body of the darklaunch header
+%% This is to ease passing on to internal APIs
+%% Returns headername, headervalue pair
+-spec get_header(#xdarklaunch{} | no_header) -> {string(), string()}.
+get_header(no_header) ->
+    {?XDARKLAUNCH_HEADER, ""};
+get_header(#xdarklaunch{raw_header=Header}) ->
+    {?XDARKLAUNCH_HEADER, Header}.
+
+%% @doc Fetch a proplist representation of the darklaunch header
+-spec get_proplist(#xdarklaunch{} | no_header) -> [{_,_}].
+get_proplist(no_header) ->
+    [];
+get_proplist(#xdarklaunch{values=Dict}) ->
+    dict:to_list(Dict).
 
 %% @doc Fetch the darklaunch value if available
 %% If a key is missing from the darklaunch headers, we throw.
