@@ -50,16 +50,12 @@ configure_rest_interface() ->
     end.
 
 read_rest_addr_port() ->
-    case application:get_env(darklaunch, listen_ip) of
-        undefined ->
+    case { envy:get(darklaunch, listen_ip, undefined, string),
+           envy:get(darklaunch, listen_port, undefined, non_neg_integer) } of
+        {Addr, Port} when Addr == undefined orelse Port == undefined ->
             undefined;
-        {ok, Addr} ->
-            case application:get_env(darklaunch, listen_port) of
-                undefined ->
-                    undefined;
-                {ok, Port} ->
-                    error_logger:info_msg("Configuring darklaunch for standalone mode (~s:~p)~n",
-                                          [Addr, Port]),
-                    {Addr, Port}
-            end
-    end.
+        {Addr, Port} ->
+           error_logger:info_msg("Configuring darklaunch for standalone mode (~s:~p)~n",
+                                   [Addr, Port]),
+           {Addr, Port}
+     end.

@@ -99,8 +99,8 @@ stop_link() ->
 init([]) ->
     %% Assume these are going to be present in the config and crash
     %% if they aren't
-    {ok, ConfigPath} = application:get_env(darklaunch, config),
-    {ok, ReloadTime} = application:get_env(darklaunch, reload_time),
+    ConfigPath = envy:get(darklaunch, config, string),
+    ReloadTime = envy:get(darklaunch, reload_time, non_neg_integer),
     timer:send_interval(ReloadTime, reload_features),
     case load_features(#state{config_path=ConfigPath}) of
         {ok, InitState} ->
