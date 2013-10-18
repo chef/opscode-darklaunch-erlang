@@ -6,3 +6,5 @@ rel/darklaunch/*
 .eunit
 doc/
 */*.beam
+.concrete
+deps.plt

@@ -10,6 +10,7 @@
 -include_lib("kernel/include/file.hrl").
 
 ensure_accessible_config_test() ->
+    error_logger:delete_report_handler(error_logger_tty_h),
     ?assertEqual(ok,
                  darklaunch_app:ensure_accessible_config("/etc/opscode/dark_launch_features.json")),
     ?assertEqual({error, insufficient_privileges_for_config_file},
