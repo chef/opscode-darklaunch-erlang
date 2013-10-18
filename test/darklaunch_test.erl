@@ -41,9 +41,9 @@ canonical_org_features(Any) ->
     Any.
 
 canonical_features(Bin) ->
-    {Keys} = ejson:decode(Bin),
+    {Keys} = jiffy:decode(Bin),
     SortedKeys = lists:sort([ canonical_org_features(K) || K <- Keys ]),
-    ejson:encode({SortedKeys}).
+    iolist_to_binary(jiffy:encode({SortedKeys})).
 
 %%------------------------------------------------------------------------------
 %% Server Setup / Cleanup Functions
