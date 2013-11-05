@@ -20,7 +20,8 @@
          get_header/1,
          get_proplist/1,
          is_enabled/2,
-         is_enabled/3
+         is_enabled/3,
+         is_enabled_strict/2
         ]).
 
 -ifdef(TEST).
@@ -36,9 +37,6 @@
          }).
 
 -type header_fun() :: fun( (string()) -> binary() | undefined).
-%%%===================================================================
-%%% API
-%%%===================================================================
 
 %% @doc Fetch and parse the darklaunch header
 %%
@@ -68,7 +66,6 @@ parse_header_int(Header) ->
     Values = lists:foldl(Extract, Dl#xdarklaunch.values, HeaderParts),
     Dl#xdarklaunch{values = Values}.
 
-
 parse_part(Part, Dict, Re) ->
     case re:run(Part, Re, [{capture, all, binary}]) of
         {match, [_, Key, Value]} ->
@@ -76,11 +73,12 @@ parse_part(Part, Dict, Re) ->
         _ -> Dict
     end.
 
-
-parse_value(<<"0">>) -> 0;
-parse_value(<<"1">>) -> 1;
-parse_value(<<"false">>) -> 0;
-parse_value(<<"true">>) -> 1;
+%% Value that aren't 0/1 false/true are passed through here and treated as false by the
+%% is_enabled_helper below.
+parse_value(<<"0">>) -> false;
+parse_value(<<"1">>) -> true;
+parse_value(<<"false">>) -> false;
+parse_value(<<"true">>) -> true;
 parse_value(X) -> X.
 
 %% @doc Fetch the body of the darklaunch header
@@ -103,13 +101,25 @@ get_proplist(#xdarklaunch{values=Dict}) ->
 %% If a key is missing from the darklaunch headers, we throw.
 %%
 -spec is_enabled(binary(), #xdarklaunch{} | no_header) -> boolean().
-is_enabled(Key, no_header) ->
-    %% Fall back to old dark launch
-    darklaunch:is_enabled(Key);
+is_enabled(_Key, no_header) ->
+    false;
 is_enabled(Key, #xdarklaunch{values=Dict}) ->
     case dict:find(Key, Dict) of
         {ok, V} -> is_enabled_helper(V);
-        error -> throw({darklaunch_missing_key, Key})
+        error -> false
+    end.
+
+-spec is_enabled_strict(binary(), #xdarklaunch{} | no_header) -> boolean().
+%% @doc Return the boolean value associated with darklaunch key `Key'. If the darklaunch
+%% data does not have a value for `Key', then an error is raised.
+is_enabled_strict(Key, no_header) ->
+    erlang:error({darklaunch_missing_key, Key});
+is_enabled_strict(Key, #xdarklaunch{values = Dict}) ->
+    case dict:find(Key, Dict) of
+        {ok, V} ->
+            is_enabled_helper(V);
+        error ->
+            erlang:error({darklaunch_missing_key, Key})
     end.
 
 %% @doc Fetch the darklaunch value if available, otherwise return a default value
@@ -117,26 +127,14 @@ is_enabled(Key, #xdarklaunch{values=Dict}) ->
 %% available
 %%
 -spec is_enabled(binary(), #xdarklaunch{} | no_header, boolean()) -> boolean().
-is_enabled(Key, no_header, _Default) ->
-    %% Fall back to old dark launch
-    darklaunch:is_enabled(Key);
+is_enabled(_Key, no_header, Default) ->
+    Default;
 is_enabled(Key, #xdarklaunch{values=Dict}, Default) ->
     case dict:find(Key, Dict) of
         {ok, V} -> is_enabled_helper(V);
         error -> Default
     end.
 
-is_enabled_helper(0) -> false;
-is_enabled_helper(1) -> true;
+is_enabled_helper(false) -> false;
 is_enabled_helper(true) -> true;
 is_enabled_helper(_) ->  false.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @spec
-%% @end
-%%--------------------------------------------------------------------
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
