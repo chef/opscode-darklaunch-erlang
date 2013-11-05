@@ -7,66 +7,130 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-fake_darklaunch(<<"foo">>) ->
-    true;
-fake_darklaunch(<<"bar">>) ->
-    false;
-fake_darklaunch(X) ->
-    ?debugVal(X),
-    true.
+mk_dl(V) ->
+    xdarklaunch_req:parse_header(fun("X-Ops-Darklaunch") -> V end).
 
-parse_header_int_test_() ->
-    {foreach,
-     fun() ->
-             meck:new(darklaunch),
-             meck:expect(darklaunch, is_enabled, fun fake_darklaunch/1),
-             ok
-     end,
-     fun(_) ->
-             meck:unload(),
-             ok
-     end,
-     [{"Parse a simple header",
-       fun() ->
-               ?assertEqual(true, fake_darklaunch(<<"foo">>)),
-               ?assertEqual(false, fake_darklaunch(<<"bar">>)),
-               Dl = xdarklaunch_req:parse_header(fun(_) -> <<"foo=0">> end),
-               ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl))
-       end},
-      {"Parse a multivalue header",
-       fun() ->
-               Dl = xdarklaunch_req:parse_header(fun(_) -> <<"foo=0;bar=1">> end),
-               ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl)),
-               ?assertEqual(true, xdarklaunch_req:is_enabled(<<"bar">>, Dl))
-       end},
-      {"Parse a header and ask for a missing value",
-       fun() ->
-               Dl = xdarklaunch_req:parse_header(fun(_) -> <<"foo=0;bar=1">> end),
-               ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl)),
-               ?assertThrow({darklaunch_missing_key, <<"baz">>}, xdarklaunch_req:is_enabled(<<"baz">>, Dl))
-       end},
-      {"Parse an empty header",
-       fun() ->
-               Dl = xdarklaunch_req:parse_header(fun(_) -> <<>> end),
-               ?assertEqual(no_header, Dl)
-       end},
-      {"Parse an empty header and query it",
-       fun() ->
-               Dl = xdarklaunch_req:parse_header(fun(_) -> <<>> end),
-               ?assertEqual(no_header, Dl),
-               ?assertEqual(true, catch xdarklaunch_req:is_enabled(<<"foo">>, Dl)),
-               ?assertEqual(false, catch xdarklaunch_req:is_enabled(<<"bar">>, Dl))
-       end},
-      {"Parse an undefined header",
-       fun() ->
-               Dl = xdarklaunch_req:parse_header(fun(_) -> undefined end),
-               ?assertEqual(true, xdarklaunch_req:is_enabled(<<"foo">>, Dl)),
-               ?assertEqual(false, xdarklaunch_req:is_enabled(<<"bar">>, Dl))
-       end},
-      {"Parse a missing header",
-       fun() ->
-               Dl = no_header,
-               ?assertEqual(true, xdarklaunch_req:is_enabled(<<"foo">>, Dl)),
-               ?assertEqual(false, xdarklaunch_req:is_enabled(<<"bar">>, Dl))
-       end}
-      ]}.
+is_enabled_test_() ->
+    [{"Parse a simple header",
+      fun() ->
+              Dl = mk_dl(<<"foo=0">>),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl))
+      end},
+     {"Parse a multivalue header",
+      fun() ->
+              Dl = mk_dl(<<"foo=0;bar=1">>),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl)),
+              ?assertEqual(true, xdarklaunch_req:is_enabled(<<"bar">>, Dl))
+      end},
+     {"Parse a header and confirm that missing values are false",
+      fun() ->
+              Dl = mk_dl(<<"foo=0;bar=1">>),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"no-such-key">>, Dl))
+      end},
+     {"Parse an empty header and query it",
+      fun() ->
+              Dl = mk_dl(<<>>),
+              ?assertEqual(no_header, Dl),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl))
+      end},
+     {"Parse an undefined header",
+      fun() ->
+              Dl = mk_dl(undefined),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"foo">>, Dl))
+      end}
+    ].
+
+is_enabled_with_default_value_test_() ->
+    Dl = mk_dl(<<"a=1;b=0">>),
+    [{"default value is ignored if feature is present",
+      fun() ->
+              ?assertEqual(true, xdarklaunch_req:is_enabled(<<"a">>, Dl, false)),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"b">>, Dl, true))
+      end},
+     {"default value is used if feature is missing with header",
+      fun() ->
+              ?assertEqual(true, xdarklaunch_req:is_enabled(<<"c">>, Dl, true)),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"c">>, Dl, false)),
+              ?assertEqual(anything, xdarklaunch_req:is_enabled(<<"c">>, Dl, anything))
+      end},
+     {"default value is used if feature is missing with no header",
+      fun() ->
+              NH = mk_dl(<<>>),
+              ?assertEqual(true, xdarklaunch_req:is_enabled(<<"c">>, NH, true)),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"c">>, NH, false)),
+              ?assertEqual(anything, xdarklaunch_req:is_enabled(<<"c">>, NH, anything))
+      end}].
+
+is_enabled_strict_test_() ->
+    Dl = mk_dl(<<"a=1;b=0">>),
+    MT = mk_dl(<<>>),
+    [{"strict access works when value present",
+      [?_assertEqual(true, xdarklaunch_req:is_enabled_strict(<<"a">>, Dl)),
+       ?_assertEqual(false, xdarklaunch_req:is_enabled_strict(<<"b">>, Dl))]},
+     {"strict access throws error when value missing",
+      ?_assertError({darklaunch_missing_key, <<"c">>},
+                    xdarklaunch_req:is_enabled_strict(<<"c">>, Dl))},
+     {"strict access errors for empty header",
+      ?_assertError({darklaunch_missing_key, <<"c">>},
+                    xdarklaunch_req:is_enabled_strict(<<"c">>, MT))}
+    ].
+
+parse_header_test_() ->
+    [{"true false 0 1",
+      fun() ->
+              [ begin
+                    DL = xdarklaunch_req:parse_header(fun(_) -> H end ),
+                    ?assertEqual(true, xdarklaunch_req:is_enabled(<<"a">>, DL)),
+                    ?assertEqual(false, xdarklaunch_req:is_enabled(<<"b">>, DL))
+                end || H <- [<<"a=1;b=0">>, <<"a=true;b=false">>] ]
+      end},
+     {"for duplicate keys, last occurance is used",
+      fun() ->
+              DL = xdarklaunch_req:parse_header(fun(_) -> <<"a=1;b=0;a=0;a=0;a=1;a=0">> end ),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"a">>, DL))
+      end},
+     {"things that aren't true or 1 are false",
+      fun() ->
+              FalseThings = [<<"a=2">>,
+                             <<"a=anything">>,
+                             <<"a=-1">>,
+                             <<"a=null">>],
+              [ begin
+                    DL = xdarklaunch_req:parse_header(fun(_) -> H end ),
+                    ?assertEqual(false, xdarklaunch_req:is_enabled(<<"a">>, DL))
+                end || H <- FalseThings ]
+      end},
+     {"odd formats",
+      fun() ->
+              Headers = [<<"a = 0 ; b = 1;">>,
+                         <<"a=0;b=1;c=">>,
+                         <<"c=;a=0;b=1">>,
+                         <<"a = f a l s e; b = 1">>],
+              DLs = [ mk_dl(H) || H <- Headers ],
+              [ begin
+                    ?assertEqual(false, xdarklaunch_req:is_enabled_strict(<<"a">>, DL)),
+                    ?assertEqual(true, xdarklaunch_req:is_enabled_strict(<<"b">>, DL))
+                end || DL <- DLs ]
+      end}
+    ].
+
+get_header_test() ->
+    Header = <<"a = 1; b = 2">>,
+    DL = xdarklaunch_req:parse_header(fun(_) -> Header end ),
+    ?assertEqual({"X-Ops-Darklaunch", Header}, xdarklaunch_req:get_header(DL)).
+
+get_proplist_test() ->
+    Header = <<"a = 1; b = 2;c=false;d=true">>,
+    DL = xdarklaunch_req:parse_header(fun(_) -> Header end ),
+    PL = xdarklaunch_req:get_proplist(DL),
+    Expect = [{<<"d">>, true},
+              {<<"c">>, false},
+              {<<"b">>, <<"2">>},
+              {<<"a">>, true}],
+    [ ?assertEqual(E, proplists:get_value(K, PL))
+      || {K, E} <- Expect ].
+
+get_no_header_test_() ->
+    DL = xdarklaunch_req:parse_header(fun(_) -> <<>> end ),
+    [?_assertEqual([], xdarklaunch_req:get_proplist(DL)),
+     ?_assertEqual({"X-Ops-Darklaunch", ""}, xdarklaunch_req:get_header(DL))].
