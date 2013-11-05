@@ -72,11 +72,12 @@ parse_part(Part, Dict, Re) ->
         _ -> Dict
     end.
 
-
-parse_value(<<"0">>) -> 0;
-parse_value(<<"1">>) -> 1;
-parse_value(<<"false">>) -> 0;
-parse_value(<<"true">>) -> 1;
+%% Value that aren't 0/1 false/true are passed through here and treated as false by the
+%% is_enabled_helper below.
+parse_value(<<"0">>) -> false;
+parse_value(<<"1">>) -> true;
+parse_value(<<"false">>) -> false;
+parse_value(<<"true">>) -> true;
 parse_value(X) -> X.
 
 %% @doc Fetch the body of the darklaunch header
@@ -120,7 +121,6 @@ is_enabled(Key, #xdarklaunch{values=Dict}, Default) ->
         error -> Default
     end.
 
-is_enabled_helper(0) -> false;
-is_enabled_helper(1) -> true;
+is_enabled_helper(false) -> false;
 is_enabled_helper(true) -> true;
 is_enabled_helper(_) ->  false.

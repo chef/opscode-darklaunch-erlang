@@ -60,3 +60,51 @@ is_enabled_with_default_value_test_() ->
               ?assertEqual(false, xdarklaunch_req:is_enabled(<<"c">>, NH, false)),
               ?assertEqual(anything, xdarklaunch_req:is_enabled(<<"c">>, NH, anything))
       end}].
+
+parse_header_test_() ->
+    [{"true false 0 1",
+      fun() ->
+              [ begin
+                    DL = xdarklaunch_req:parse_header(fun(_) -> H end ),
+                    ?assertEqual(true, xdarklaunch_req:is_enabled(<<"a">>, DL)),
+                    ?assertEqual(false, xdarklaunch_req:is_enabled(<<"b">>, DL))
+                end || H <- [<<"a=1;b=0">>, <<"a=true;b=false">>] ]
+      end},
+     {"for duplicate keys, last occurance is used",
+      fun() ->
+              DL = xdarklaunch_req:parse_header(fun(_) -> <<"a=1;b=0;a=0;a=0;a=1;a=0">> end ),
+              ?assertEqual(false, xdarklaunch_req:is_enabled(<<"a">>, DL))
+      end},
+     {"things that aren't true or 1 are false",
+      fun() ->
+              FalseThings = [<<"a=2">>,
+                             <<"a=anything">>,
+                             <<"a=-1">>,
+                             <<"a=null">>],
+              [ begin
+                    DL = xdarklaunch_req:parse_header(fun(_) -> H end ),
+                    ?assertEqual(false, xdarklaunch_req:is_enabled(<<"a">>, DL))
+                end || H <- FalseThings ]
+      end}
+    ].
+
+get_header_test() ->
+    Header = <<"a = 1; b = 2">>,
+    DL = xdarklaunch_req:parse_header(fun(_) -> Header end ),
+    ?assertEqual({"X-Ops-Darklaunch", Header}, xdarklaunch_req:get_header(DL)).
+
+get_proplist_test() ->
+    Header = <<"a = 1; b = 2;c=false;d=true">>,
+    DL = xdarklaunch_req:parse_header(fun(_) -> Header end ),
+    PL = xdarklaunch_req:get_proplist(DL),
+    Expect = [{<<"d">>, true},
+              {<<"c">>, false},
+              {<<"b">>, <<"2">>},
+              {<<"a">>, true}],
+    [ ?assertEqual(E, proplists:get_value(K, PL))
+      || {K, E} <- Expect ].
+
+get_no_header_test_() ->
+    DL = xdarklaunch_req:parse_header(fun(_) -> <<>> end ),
+    [?_assertEqual([], xdarklaunch_req:get_proplist(DL)),
+     ?_assertEqual({"X-Ops-Darklaunch", ""}, xdarklaunch_req:get_header(DL))].
