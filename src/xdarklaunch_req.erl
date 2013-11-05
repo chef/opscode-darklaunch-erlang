@@ -36,9 +36,6 @@
          }).
 
 -type header_fun() :: fun( (string()) -> binary() | undefined).
-%%%===================================================================
-%%% API
-%%%===================================================================
 
 %% @doc Fetch and parse the darklaunch header
 %%
@@ -67,7 +64,6 @@ parse_header_int(Header) ->
     Extract = fun(Part, Dict) -> parse_part(Part, Dict, Re) end,
     Values = lists:foldl(Extract, Dl#xdarklaunch.values, HeaderParts),
     Dl#xdarklaunch{values = Values}.
-
 
 parse_part(Part, Dict, Re) ->
     case re:run(Part, Re, [{capture, all, binary}]) of
@@ -103,13 +99,12 @@ get_proplist(#xdarklaunch{values=Dict}) ->
 %% If a key is missing from the darklaunch headers, we throw.
 %%
 -spec is_enabled(binary(), #xdarklaunch{} | no_header) -> boolean().
-is_enabled(Key, no_header) ->
-    %% Fall back to old dark launch
-    darklaunch:is_enabled(Key);
+is_enabled(_Key, no_header) ->
+    false;
 is_enabled(Key, #xdarklaunch{values=Dict}) ->
     case dict:find(Key, Dict) of
         {ok, V} -> is_enabled_helper(V);
-        error -> throw({darklaunch_missing_key, Key})
+        error -> false
     end.
 
 %% @doc Fetch the darklaunch value if available, otherwise return a default value
@@ -117,9 +112,8 @@ is_enabled(Key, #xdarklaunch{values=Dict}) ->
 %% available
 %%
 -spec is_enabled(binary(), #xdarklaunch{} | no_header, boolean()) -> boolean().
-is_enabled(Key, no_header, _Default) ->
-    %% Fall back to old dark launch
-    darklaunch:is_enabled(Key);
+is_enabled(_Key, no_header, Default) ->
+    Default;
 is_enabled(Key, #xdarklaunch{values=Dict}, Default) ->
     case dict:find(Key, Dict) of
         {ok, V} -> is_enabled_helper(V);
@@ -130,13 +124,3 @@ is_enabled_helper(0) -> false;
 is_enabled_helper(1) -> true;
 is_enabled_helper(true) -> true;
 is_enabled_helper(_) ->  false.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @spec
-%% @end
-%%--------------------------------------------------------------------
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
