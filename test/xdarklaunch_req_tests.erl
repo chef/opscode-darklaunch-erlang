@@ -85,6 +85,18 @@ parse_header_test_() ->
                     DL = xdarklaunch_req:parse_header(fun(_) -> H end ),
                     ?assertEqual(false, xdarklaunch_req:is_enabled(<<"a">>, DL))
                 end || H <- FalseThings ]
+      end},
+     {"odd formats",
+      fun() ->
+              Headers = [<<"a = 0 ; b = 1;">>,
+                         <<"a=0;b=1;c=">>,
+                         <<"c=;a=0;b=1">>,
+                         <<"a = f a l s e; b = 1">>],
+              DLs = [ mk_dl(H) || H <- Headers ],
+              [ begin
+                    ?assertEqual(false, xdarklaunch_req:is_enabled_strict(<<"a">>, DL)),
+                    ?assertEqual(true, xdarklaunch_req:is_enabled_strict(<<"b">>, DL))
+                end || DL <- DLs ]
       end}
     ].
 
