@@ -20,7 +20,8 @@
          get_header/1,
          get_proplist/1,
          is_enabled/2,
-         is_enabled/3
+         is_enabled/3,
+         is_enabled_strict/2
         ]).
 
 -ifdef(TEST).
@@ -106,6 +107,19 @@ is_enabled(Key, #xdarklaunch{values=Dict}) ->
     case dict:find(Key, Dict) of
         {ok, V} -> is_enabled_helper(V);
         error -> false
+    end.
+
+-spec is_enabled_strict(binary(), #xdarklaunch{} | no_header) -> boolean().
+%% @doc Return the boolean value associated with darklaunch key `Key'. If the darklaunch
+%% data does not have a value for `Key', then an error is raised.
+is_enabled_strict(Key, no_header) ->
+    erlang:error({darklaunch_missing_key, Key});
+is_enabled_strict(Key, #xdarklaunch{values = Dict}) ->
+    case dict:find(Key, Dict) of
+        {ok, V} ->
+            is_enabled_helper(V);
+        error ->
+            erlang:error({darklaunch_missing_key, Key})
     end.
 
 %% @doc Fetch the darklaunch value if available, otherwise return a default value

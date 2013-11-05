@@ -61,6 +61,20 @@ is_enabled_with_default_value_test_() ->
               ?assertEqual(anything, xdarklaunch_req:is_enabled(<<"c">>, NH, anything))
       end}].
 
+is_enabled_strict_test_() ->
+    Dl = mk_dl(<<"a=1;b=0">>),
+    MT = mk_dl(<<>>),
+    [{"strict access works when value present",
+      [?_assertEqual(true, xdarklaunch_req:is_enabled_strict(<<"a">>, Dl)),
+       ?_assertEqual(false, xdarklaunch_req:is_enabled_strict(<<"b">>, Dl))]},
+     {"strict access throws error when value missing",
+      ?_assertError({darklaunch_missing_key, <<"c">>},
+                    xdarklaunch_req:is_enabled_strict(<<"c">>, Dl))},
+     {"strict access errors for empty header",
+      ?_assertError({darklaunch_missing_key, <<"c">>},
+                    xdarklaunch_req:is_enabled_strict(<<"c">>, MT))}
+    ].
+
 parse_header_test_() ->
     [{"true false 0 1",
       fun() ->
