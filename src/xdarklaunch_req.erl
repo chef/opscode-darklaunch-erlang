@@ -28,6 +28,10 @@
 -export([parse_header_int/1]).
 -endif.
 
+-ifdef(namespaced_types).
+-type dict() :: dict:dict().
+-endif.
+
 -define(XDARKLAUNCH_HEADER, "X-Ops-Darklaunch").
 
 -record(xdarklaunch, {

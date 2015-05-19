@@ -10,6 +10,10 @@
 
 -include_lib("kernel/include/file.hrl").
 
+-ifdef(namespaced_types).
+-type dict() :: dict:dict().
+-endif.
+
 -define(SERVER, ?MODULE).
 
 %%-------------------------------------------------------------------
