@@ -35,7 +35,7 @@
 -define(XDARKLAUNCH_HEADER, "X-Ops-Darklaunch").
 
 -record(xdarklaunch, {
-          orgname :: string(),
+          orgname :: undefined: string(),
           raw_header :: string(),
           values = dict:new() :: dict()
          }).
@@ -50,7 +50,7 @@
 %% Expects a header in the format
 %% KEY1=VALUE1;KEY2=VALUE2...  KEY is expected to be alphanumeric plus _ VALUE can be any
 %% non-whitespace string, but currently we only expect 0,1
--spec parse_header(header_fun()) -> #xdarklaunch{}.
+-spec parse_header(header_fun()) -> #xdarklaunch{} | no_header.
 parse_header(GetHeader) ->
     %% This header is inserted by nginx, so we shouldn't need to be too paranoid about its contents.
     Header = GetHeader(?XDARKLAUNCH_HEADER),
