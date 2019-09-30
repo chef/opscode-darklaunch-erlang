@@ -30,4 +30,3 @@ start_link() ->
 init([]) ->
     Children = [?CHILD(darklaunch, worker)],
     {ok, {{one_for_one, 10, 10}, Children}}.
-

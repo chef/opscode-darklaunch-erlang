@@ -36,7 +36,7 @@
 start(_StartType, _StartArgs) ->
     % If the config file is present and writable, or non-existent but writable, go ahead and
     % start up the supervisor.  Otherwise bail out!
-    {ok, ConfigPath} = application:get_env(darklaunch,config),
+    ConfigPath = envy:get(darklaunch,config, string),
     case ensure_accessible_config(ConfigPath) of
         ok ->
             darklaunch_sup:start_link();
