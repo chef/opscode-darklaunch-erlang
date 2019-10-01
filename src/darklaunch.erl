@@ -2,7 +2,7 @@
 %% ex: ts=4 sw=4 et
 %% @author Kevin Smith <kevin@opscode.com>
 %% @author Christopher Maier <cm@opscode.com>
-%% @copyright 2011-2018 Chef, Inc.
+%% @copyright 2011-2019 Chef, Inc.
 
 -module(darklaunch).
 
