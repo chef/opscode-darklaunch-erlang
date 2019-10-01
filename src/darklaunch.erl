@@ -2,7 +2,7 @@
 %% ex: ts=4 sw=4 et
 %% @author Kevin Smith <kevin@opscode.com>
 %% @author Christopher Maier <cm@opscode.com>
-%% @copyright 2011 Opscode, Inc.
+%% @copyright 2011-2019 Chef, Inc.
 
 -module(darklaunch).
 
@@ -11,7 +11,19 @@
 -include_lib("kernel/include/file.hrl").
 
 -ifdef(namespaced_types).
--type dict() :: dict:dict().
+% -type dict() :: dict:dict().
+-type features() :: dict:dict(bin_or_string(), boolean() ).
+-type org_features() :: dict:dict({bin_or_string(), bin_or_string()}, boolean() ).
+-else.
+
+-type features() :: dict(bin_or_string(), boolean() ).
+-type org_features() :: dict({bin_or_string(), bin_or_string()}, boolean() ).
+-endif.
+
+-ifdef(fun_stacktrace).
+-define(GET_STACKTRACE, erlang:get_stacktrace()).
+-else.
+-define(GET_STACKTRACE, try throw(fake_stacktrace) catch _:_:S -> S end).
 -endif.
 
 -define(SERVER, ?MODULE).
@@ -28,9 +40,9 @@
 %%     the feature is enabled for that organization
 %%-------------------------------------------------------------------
 -record(state, {config_path :: string(),
-                mtime :: file:date_time(),
-                features :: dict(),
-                org_features :: dict()}).
+                mtime :: undefined | file:date_time(),
+                features = dict:new() :: features(),
+                org_features = dict:new() :: org_features()}).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -76,11 +88,11 @@ is_enabled(Feature, Org) ->
 is_enabled(Feature) ->
     gen_server:call(?SERVER, {enabled, ensure_bin(Feature)}, infinity).
 
--spec set_enabled/3::(bin_or_string(), bin_or_string(), boolean()) -> ok.
+-spec set_enabled(bin_or_string(), bin_or_string(), boolean()) -> ok.
 set_enabled(Feature, Org, Val) when is_boolean(Val) ->
     gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), ensure_bin(Org), Val}, infinity).
 
--spec set_enabled/2::(bin_or_string(), boolean()) -> ok.
+-spec set_enabled(bin_or_string(), boolean()) -> ok.
 set_enabled(Feature, Val) when is_boolean(Val) ->
     gen_server:call(?SERVER, {set_enabled, ensure_bin(Feature), Val}, infinity).
 
@@ -99,7 +111,7 @@ stop_link() ->
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
-
+-spec init([any()]) -> {'ok',#state{}} | {'stop',{'error','failed_connect'}}.
 init([]) ->
     %% Assume these are going to be present in the config and crash
     %% if they aren't
@@ -113,6 +125,7 @@ init([]) ->
             {stop, Reason}
     end.
 
+-spec handle_call(any(), any(), #state{}) -> {reply, ok | false | true, #state{}} | {noreply, #state{}} | {'stop',normal,ok, #state{}}.
 handle_call({enabled, Feature}, _From, #state{features = Features}=State) ->
     Ans = case dict:find(Feature, Features) of
               error ->
@@ -212,25 +225,30 @@ handle_call(to_json, _From, State) when is_record(State, state)->
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(_Request, _From, State) ->
-    {noreply, ok, State}.
+    {noreply, State}.
 
+
+-spec handle_cast(any(), #state{}) -> {noreply, #state{}}.
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+-spec handle_info(_, #state{}) -> {'noreply', #state{}}.
 handle_info(reload_features, State) ->
     case check_features(State) of
         {ok, #state{}=NewState} ->
             {noreply, NewState};
         {error, Reason, #state{}=ErrState} ->
-            error_logger:error_report({error, Reason, erlang:get_stacktrace()}),
+            error_logger:error_report({error, Reason, ?GET_STACKTRACE}),
             {noreply, ErrState}
     end;
 handle_info(_Info, State) ->
     {noreply, State}.
 
+-spec terminate(_,#state{}) -> ok.
 terminate(_Reason, _State) ->
     ok.
 
+-spec code_change(_,#state{},_) -> {'ok',#state{}}.
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -264,11 +282,14 @@ state_to_json(#state{features = Features,
 %%          This is only called from load_features/3, which handles syncing
 %%          the details of the new config with the server's state
 %%------------------------------------------------------------------------------
+
+%-spec write_config(binary(), #state{}) -> #state{ #state{config_path::string(),mtime::{{non_neg_integer(), | 7 | 8 | 9 | 10 | 11 | 12,1..255},{byte(),byte(),byte()}},features::dict:dict(_,_),org_features::dict:dict(_,_) }.
 write_config(Bin, #state{config_path = ConfigPath} = State) ->
     ok = file:write_file(ConfigPath, Bin),
     {ok, FileInfo} = file:read_file_info(ConfigPath),
     State#state{mtime=FileInfo#file_info.mtime}.
 
+-spec parse_config(binary()) -> {'error',{'bad_json',_}} | {'ok',{[],[]}}.
 parse_config(Bin) ->
     {TopKeys} = try
                     jiffy:decode(Bin)
@@ -291,6 +312,8 @@ parse_config(Bin) ->
 %%          come from a file.  Used in the `from_json` handler to load arbitrary
 %%          JSON and overwrite the config file.
 %%------------------------------------------------------------------------------
+-spec load_features(Bin::binary(), State::#state{})
+                   -> {ok, #state{}} | {error, Reason::term(), #state{}}.
 load_features(Bin, State) ->
     load_features(Bin, write_config, State).
 
@@ -321,7 +344,7 @@ load_features(Bin, FileInfo, State) ->
         %% A key in the configuration doesn't have the proper kind of value;
         %% Note this fact, and continue using the original state
         throw:{invalid_config, Why} ->
-            error_logger:error_report({error, Why, erlang:get_stacktrace()}),
+            error_logger:error_report({error, Why, ?GET_STACKTRACE}),
             {error, invalid_config, State}
     end.
 
@@ -361,6 +384,7 @@ check_features(#state{config_path=ConfigPath, mtime=MTime}=State) ->
             {error, Error, State}
     end.
 
+-spec parse_value({_, boolean() | [any()]} , {_,_}) -> {_,_}.
 parse_value({Key, Val}, {GlobalConfig, OrgConfig}) when is_boolean(Val) ->
     {[{Key, Val}|GlobalConfig], OrgConfig};
 parse_value({Key, Orgs}, {GlobalConfig, OrgConfig}) when is_list(Orgs) ->
@@ -389,6 +413,8 @@ read_config(ConfigPath) ->
             Error
     end.
 
+
+-spec validate_config_json([] | {'bad_json',_}) -> 'ok' | {'bad_json',_} | {'duplicate_key',bin_or_string()}.
 validate_config_json({bad_json, Reason}) ->
     {bad_json, Reason};
 validate_config_json([]) ->
@@ -401,6 +427,7 @@ validate_config_json([{Key, _}|T]) ->
             {duplicate_key, Key}
     end.
 
+-spec ensure_bin(binary() | []) -> binary().
 ensure_bin(L) when is_list(L) ->
     list_to_binary(L);
 ensure_bin(B) when is_binary(B) ->
